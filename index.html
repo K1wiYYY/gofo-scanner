@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="theme-color" content="#0f172a">
+  <title>GOFO 扫码记录</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --accent: #3b82f6;
+      --accent-dim: rgba(59,130,246,0.15);
+      --text: #f1f5f9;
+      --sub: #94a3b8;
+      --danger: #ef4444;
+      --success: #22c55e;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px 10px;
+      flex-shrink: 0;
+    }
+    .header-title { font-size: 20px; font-weight: 700; letter-spacing: .3px; }
+    .header-badge {
+      background: var(--accent);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      margin: 0 20px 12px;
+      background: var(--card);
+      border-radius: 10px;
+      padding: 4px;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .tab {
+      flex: 1;
+      padding: 9px;
+      border: none;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--sub);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .tab.active { background: var(--accent); color: #fff; font-weight: 700; }
+
+    /* ── Scan Tab ── */
+    #tab-scan { display: flex; flex-direction: column; flex: 1; overflow: hidden; padding: 0 20px 20px; }
+
+    .camera-wrap {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #000;
+      flex-shrink: 0;
+      height: 300px;
+    }
+
+    /* Override html5-qrcode default styles */
+    #reader {
+      width: 100% !important;
+      height: 100% !important;
+      border: none !important;
+    }
+    #reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
+    #reader img { display: none !important; }
+    #reader__scan_region { border: none !important; }
+    #reader__dashboard { display: none !important; }
+    #reader__scan_region > img { display: none !important; }
+
+    .viewfinder {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .vf-box {
+      position: relative;
+      width: 200px;
+      height: 200px;
+    }
+    .corner {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-color: var(--accent);
+      border-style: solid;
+    }
+    .c-tl { top:0; left:0; border-width: 3px 0 0 3px; }
+    .c-tr { top:0; right:0; border-width: 3px 3px 0 0; }
+    .c-bl { bottom:0; left:0; border-width: 0 0 3px 3px; }
+    .c-br { bottom:0; right:0; border-width: 0 3px 3px 0; }
+
+    .scan-line {
+      position: absolute;
+      left: 4px; right: 4px;
+      height: 2px;
+      background: var(--accent);
+      opacity: .85;
+      animation: scan 2s ease-in-out infinite alternate;
+    }
+    @keyframes scan { from { top: 4px; } to { top: calc(100% - 6px); } }
+
+    .scan-hint {
+      position: absolute;
+      bottom: 12px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255,255,255,.65);
+    }
+
+    .flash { animation: flash .25s ease-out; }
+    @keyframes flash {
+      0%   { opacity: 1; background: rgba(255,255,255,.5); }
+      100% { opacity: 0; background: transparent; }
+    }
+    .flash-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: 16px;
+      opacity: 0;
+    }
+
+    /* Start button shown before camera starts */
+    .start-btn-wrap {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(0,0,0,.6);
+      border-radius: 16px;
+    }
+    .start-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .start-btn:active { opacity: .8; }
+    .start-hint { font-size: 13px; color: var(--sub); }
+
+    /* Last scan result */
+    .last-scan {
+      margin-top: 14px;
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .last-scan-label { font-size: 11px; color: var(--sub); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+    .last-scan-value {
+      font-size: 17px;
+      font-weight: 700;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      letter-spacing: .5px;
+      color: var(--text);
+      word-break: break-all;
+    }
+    .last-scan-value.new { color: var(--success); }
+
+    /* ── List Tab ── */
+    #tab-list { display: none; flex-direction: column; flex: 1; overflow: hidden; padding: 0 20px 20px; }
+
+    .list-actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-shrink: 0;
+    }
+    .btn-export {
+      flex: 1;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-export:active { opacity: .8; }
+    .btn-clear {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-clear:active { opacity: .7; }
+
+    .records-list {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .empty-title { color: var(--sub); font-size: 17px; font-weight: 600; }
+    .empty-hint { color: var(--border); font-size: 13px; }
+
+    .record-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--card);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+      border: 1px solid var(--border);
+    }
+    .record-index {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .record-index-text { color: var(--accent); font-size: 13px; font-weight: 700; }
+    .record-body { flex: 1; min-width: 0; }
+    .record-tracking {
+      font-size: 15px;
+      font-weight: 600;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      letter-spacing: .3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .record-meta { font-size: 11px; color: var(--sub); margin-top: 3px; }
+    .record-copy {
+      background: var(--border);
+      border: none;
+      border-radius: 6px;
+      color: var(--sub);
+      font-size: 11px;
+      padding: 4px 8px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .record-copy:active { background: var(--accent); color: #fff; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 32px;
+      left: 50%; transform: translateX(-50%);
+      background: var(--success);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity .2s;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 999;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <div class="header">
+    <span class="header-title">GOFO 扫码记录</span>
+    <span class="header-badge" id="badge">0 票</span>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" id="btn-tab-scan" onclick="switchTab('scan')">扫　码</button>
+    <button class="tab" id="btn-tab-list" onclick="switchTab('list')">记录 (<span id="count">0</span>)</button>
+  </div>
+
+  <!-- Scan Tab -->
+  <div id="tab-scan">
+    <div class="camera-wrap">
+      <div id="reader"></div>
+
+      <!-- Viewfinder overlay -->
+      <div class="viewfinder">
+        <div class="vf-box">
+          <div class="corner c-tl"></div>
+          <div class="corner c-tr"></div>
+          <div class="corner c-bl"></div>
+          <div class="corner c-br"></div>
+          <div class="scan-line" id="scan-line" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- Flash overlay -->
+      <div class="flash-overlay" id="flash-overlay"></div>
+
+      <!-- Start button -->
+      <div class="start-btn-wrap" id="start-wrap">
+        <button class="start-btn" onclick="startScanner()">开启摄像头</button>
+        <span class="start-hint">点击后请允许摄像头权限</span>
+      </div>
+
+      <span class="scan-hint" id="scan-hint-text" style="display:none">将条形码 / 二维码对准框内</span>
+    </div>
+
+    <div class="last-scan">
+      <div class="last-scan-label">最近扫描</div>
+      <div class="last-scan-value" id="last-value">—</div>
+    </div>
+  </div>
+
+  <!-- List Tab -->
+  <div id="tab-list">
+    <div class="list-actions">
+      <button class="btn-export" onclick="exportCSV()">导出 CSV</button>
+      <button class="btn-clear" onclick="clearAll()" id="btn-clear" style="display:none">清空</button>
+    </div>
+    <div id="records-container" class="records-list">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-title">暂无记录</div>
+        <div class="empty-hint">切换到「扫码」标签开始扫码</div>
+      </div>
+      <div id="records-list"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const STORAGE_KEY = 'gofo_records';
+  const COOLDOWN_MS = 2000;
+
+  let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  let scanner = null;
+  let lastScan = { data: null, time: 0 };
+  let scannerStarted = false;
+
+  // ── Init ──
+  updateUI();
+
+  // ── Tab switching ──
+  function switchTab(tab) {
+    const isScan = tab === 'scan';
+    document.getElementById('tab-scan').style.display = isScan ? 'flex' : 'none';
+    document.getElementById('tab-list').style.display = isScan ? 'none' : 'flex';
+    document.getElementById('btn-tab-scan').classList.toggle('active', isScan);
+    document.getElementById('btn-tab-list').classList.toggle('active', !isScan);
+  }
+
+  // ── Scanner ──
+  async function startScanner() {
+    if (scannerStarted) return;
+    document.getElementById('start-wrap').style.display = 'none';
+
+    const formats = [
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.CODE_93,
+      Html5QrcodeSupportedFormats.CODABAR,
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.ITF,
+      Html5QrcodeSupportedFormats.PDF_417,
+      Html5QrcodeSupportedFormats.DATA_MATRIX,
+      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.AZTEC,
+    ];
+
+    scanner = new Html5Qrcode('reader', { formatsToSupport: formats, verbose: false });
+
+    try {
+      await scanner.start(
+        { facingMode: 'environment' },
+        { fps: 15, qrbox: { width: 200, height: 200 }, aspectRatio: 1.333 },
+        onScanSuccess,
+        () => {}
+      );
+      scannerStarted = true;
+      document.getElementById('scan-line').style.display = 'block';
+      document.getElementById('scan-hint-text').style.display = 'block';
+    } catch (err) {
+      document.getElementById('start-wrap').style.display = 'flex';
+      document.querySelector('.start-hint').textContent = '摄像头启动失败，请检查权限';
+      console.error(err);
+    }
+  }
+
+  function onScanSuccess(data) {
+    const now = Date.now();
+    if (data === lastScan.data && now - lastScan.time < COOLDOWN_MS) return;
+    lastScan = { data, time: now };
+
+    // Flash effect
+    const overlay = document.getElementById('flash-overlay');
+    overlay.style.background = 'rgba(255,255,255,0.35)';
+    overlay.style.opacity = '1';
+    setTimeout(() => { overlay.style.opacity = '0'; }, 200);
+
+    // Vibrate
+    if (navigator.vibrate) navigator.vibrate(80);
+
+    // Update last scan display
+    const el = document.getElementById('last-value');
+    el.textContent = data;
+    el.className = 'last-scan-value new';
+    setTimeout(() => el.classList.remove('new'), 1500);
+
+    // Add record
+    const rec = {
+      id: String(now),
+      trackingNo: data,
+      time: new Date().toLocaleString('zh-CN', { hour12: false }),
+    };
+    records.unshift(rec);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    updateUI();
+    showToast('✓ ' + data);
+  }
+
+  // ── Records UI ──
+  function updateUI() {
+    const n = records.length;
+    document.getElementById('badge').textContent = n + ' 票';
+    document.getElementById('count').textContent = n;
+    document.getElementById('btn-clear').style.display = n > 0 ? 'block' : 'none';
+    document.getElementById('empty-state').style.display = n === 0 ? 'flex' : 'none';
+
+    const list = document.getElementById('records-list');
+    list.innerHTML = records.map((r, i) => `
+      <div class="record-item">
+        <div class="record-index"><span class="record-index-text">${n - i}</span></div>
+        <div class="record-body">
+          <div class="record-tracking">${escHtml(r.trackingNo)}</div>
+          <div class="record-meta">${r.time}</div>
+        </div>
+        <button class="record-copy" onclick="copyRecord('${escHtml(r.trackingNo)}')">复制</button>
+      </div>
+    `).join('');
+  }
+
+  function copyRecord(text) {
+    navigator.clipboard.writeText(text).then(() => showToast('已复制'));
+  }
+
+  // ── Export ──
+  function exportCSV() {
+    if (records.length === 0) { showToast('暂无记录'); return; }
+    const bom = '﻿';
+    const header = '运单号,扫描时间\n';
+    const rows = records.map(r => `"${r.trackingNo}","${r.time}"`).join('\n');
+    const blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `GOFO扫码记录_${new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV 已导出');
+  }
+
+  // ── Clear ──
+  function clearAll() {
+    if (!confirm(`确认清空全部 ${records.length} 条记录？此操作无法恢复。`)) return;
+    records = [];
+    localStorage.removeItem(STORAGE_KEY);
+    updateUI();
+    showToast('已清空');
+  }
+
+  // ── Toast ──
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
