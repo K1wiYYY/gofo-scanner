@@ -114,8 +114,8 @@
     }
     .vf-box {
       position: relative;
-      width: 200px;
-      height: 200px;
+      width: 260px;
+      height: 140px;
     }
     .corner {
       position: absolute;
@@ -135,7 +135,7 @@
       height: 2px;
       background: var(--accent);
       opacity: .85;
-      animation: scan 2s ease-in-out infinite alternate;
+      animation: scan 1.5s ease-in-out infinite alternate;
     }
     @keyframes scan { from { top: 4px; } to { top: calc(100% - 6px); } }
 
@@ -430,7 +430,7 @@
     try {
       await scanner.start(
         { facingMode: 'environment' },
-        { fps: 15, qrbox: { width: 200, height: 200 }, aspectRatio: 1.333 },
+        { fps: 20, qrbox: { width: 260, height: 140 }, aspectRatio: 1.333 },
         onScanSuccess,
         () => {}
       );
