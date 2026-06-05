@@ -205,6 +205,7 @@
       word-break: break-all;
     }
     .last-scan-value.new { color: var(--success); }
+    .last-scan-value.dup { color: var(--danger); }
 
     /* ── List Tab ── */
     #tab-list { display: none; flex-direction: column; flex: 1; overflow: hidden; padding: 0 20px 20px; }
@@ -385,11 +386,11 @@
 
 <script>
   const STORAGE_KEY = 'gofo_records';
-  const COOLDOWN_MS = 2000;
 
   let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  let scannedSet = new Set(records.map(r => r.trackingNo));
   let scanner = null;
-  let lastScan = { data: null, time: 0 };
+  let lastRaw = { data: null, time: 0 }; // raw debounce to avoid scanner firing 10x/sec
   let scannerStarted = false;
 
   // ── Init ──
@@ -446,25 +447,34 @@
 
   function onScanSuccess(data) {
     const now = Date.now();
-    if (data === lastScan.data && now - lastScan.time < COOLDOWN_MS) return;
-    lastScan = { data, time: now };
+    // Raw debounce: ignore same result within 1s (scanner fires multiple times per read)
+    if (data === lastRaw.data && now - lastRaw.time < 1000) return;
+    lastRaw = { data, time: now };
 
-    // Flash effect
+    // Update last scan display regardless of duplicate
+    const el = document.getElementById('last-value');
+    el.textContent = data;
+
+    // Duplicate check — same tracking number only recorded once ever
+    if (scannedSet.has(data)) {
+      el.className = 'last-scan-value dup';
+      showToast('⚠︎ 已记录过', 'warn');
+      if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+      return;
+    }
+
+    // New record
+    scannedSet.add(data);
+    el.className = 'last-scan-value new';
+    setTimeout(() => el.classList.remove('new'), 1500);
+
+    if (navigator.vibrate) navigator.vibrate(80);
+
     const overlay = document.getElementById('flash-overlay');
     overlay.style.background = 'rgba(255,255,255,0.35)';
     overlay.style.opacity = '1';
     setTimeout(() => { overlay.style.opacity = '0'; }, 200);
 
-    // Vibrate
-    if (navigator.vibrate) navigator.vibrate(80);
-
-    // Update last scan display
-    const el = document.getElementById('last-value');
-    el.textContent = data;
-    el.className = 'last-scan-value new';
-    setTimeout(() => el.classList.remove('new'), 1500);
-
-    // Add record
     const rec = {
       id: String(now),
       trackingNo: data,
@@ -521,6 +531,7 @@
   function clearAll() {
     if (!confirm(`确认清空全部 ${records.length} 条记录？此操作无法恢复。`)) return;
     records = [];
+    scannedSet.clear();
     localStorage.removeItem(STORAGE_KEY);
     updateUI();
     showToast('已清空');
@@ -528,9 +539,10 @@
 
   // ── Toast ──
   let toastTimer;
-  function showToast(msg) {
+  function showToast(msg, type = 'ok') {
     const t = document.getElementById('toast');
     t.textContent = msg;
+    t.style.background = type === 'warn' ? 'var(--danger)' : 'var(--success)';
     t.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
