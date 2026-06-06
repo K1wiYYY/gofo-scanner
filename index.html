@@ -202,14 +202,31 @@
 
 <script>
 const STORAGE_KEY = 'gofo_records';
+const API = 'https://gofo-scanner.gofo-k1wiyyy.workers.dev';
 let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 let scannedSet = new Set(records.map(r => r.trackingNo));
+let useCloud = true; // sync with Cloudflare backend
 let lastCooldown = { v: null, t: 0 };
 let camStarted = false;
 
-// ── Init ──
-updateUI();
+// ── Init: load from cloud, fall back to local ──
 setupPDA();
+loadFromCloud();
+
+async function loadFromCloud() {
+  try {
+    const res = await fetch(API + '/records');
+    if (res.ok) {
+      const cloud = await res.json();
+      if (Array.isArray(cloud) && cloud.length >= records.length) {
+        records = cloud;
+        scannedSet = new Set(records.map(r => r.trackingNo));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      }
+    }
+  } catch(e) { useCloud = false; }
+  updateUI();
+}
 
 // URL param from iOS Shortcut
 (() => {
@@ -356,6 +373,11 @@ function record(trackingNo) {
 
   records.unshift({ id: String(now), trackingNo, time: new Date().toLocaleString('zh-CN',{hour12:false}) });
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+
+  // Sync to Cloudflare (silent, fire-and-forget)
+  if (useCloud) {
+    fetch(API + '/add?t=' + encodeURIComponent(trackingNo)).catch(() => {});
+  }
   updateUI();
   showToast('✓ ' + trackingNo);
 }
