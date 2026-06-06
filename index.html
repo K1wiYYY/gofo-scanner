@@ -192,6 +192,14 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<!-- iOS Shortcut full-screen feedback -->
+<div id="shortcut-overlay" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:32px;">
+  <div style="font-size:64px" id="s-icon">✓</div>
+  <div id="s-val" style="font-size:20px;font-weight:700;font-family:monospace;text-align:center;word-break:break-all;color:var(--text)"></div>
+  <div id="s-msg" style="font-size:15px;color:var(--sub)"></div>
+  <div style="font-size:13px;color:var(--border)">已记录 <span id="s-count">0</span> 票</div>
+</div>
+
 <script>
 const STORAGE_KEY = 'gofo_records';
 let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -203,10 +211,20 @@ let camStarted = false;
 updateUI();
 setupPDA();
 
-// URL param from iOS Shortcut
+// URL param from iOS Shortcut — ?add=TRACKINGNO
 (() => {
   const v = new URLSearchParams(location.search).get('add');
-  if (v) { history.replaceState(null,'',location.pathname); setTimeout(()=>record(v.trim()),300); }
+  if (!v) return;
+  history.replaceState(null, '', location.pathname);
+  // Show shortcut-mode overlay (full screen result)
+  document.getElementById('shortcut-overlay').style.display = 'flex';
+  setTimeout(() => {
+    record(v.trim());
+    // Auto-hide overlay after 1.2s so user sees result before next scan
+    setTimeout(() => {
+      document.getElementById('shortcut-overlay').style.display = 'none';
+    }, 1200);
+  }, 100);
 })();
 
 // ── PDA / keyboard wedge ──
@@ -301,6 +319,12 @@ function record(trackingNo) {
     el.className = 'last-value dup';
     showToast('⚠︎ 已记录过', 'warn');
     if (navigator.vibrate) navigator.vibrate([40,40,40]);
+    // Update shortcut overlay for duplicate
+    document.getElementById('s-icon').textContent = '⚠︎';
+    document.getElementById('s-icon').style.color = 'var(--danger)';
+    document.getElementById('s-val').textContent = trackingNo;
+    document.getElementById('s-msg').textContent = '已记录过，跳过';
+    document.getElementById('s-count').textContent = records.length;
     return;
   }
 
@@ -308,6 +332,12 @@ function record(trackingNo) {
   el.className = 'last-value ok';
   setTimeout(() => el.classList.remove('ok'), 1500);
   if (navigator.vibrate) navigator.vibrate(60);
+  // Update shortcut overlay for success
+  document.getElementById('s-icon').textContent = '✓';
+  document.getElementById('s-icon').style.color = 'var(--success)';
+  document.getElementById('s-val').textContent = trackingNo;
+  document.getElementById('s-msg').textContent = '记录成功';
+  document.getElementById('s-count').textContent = records.length + 1;
 
   records.unshift({ id: String(now), trackingNo, time: new Date().toLocaleString('zh-CN',{hour12:false}) });
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
