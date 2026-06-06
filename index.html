@@ -309,17 +309,27 @@ async function startCamera() {
 
       // RAF loop: detect immediately after each result, as fast as device allows
       let busy = false;
+      let attempts = 0;
       function detectLoop() {
         if (!camStarted) return;
         requestAnimationFrame(detectLoop);
-        if (busy || video.readyState < 2) return;
+        if (busy || video.readyState < 3) return;
         busy = true;
+        attempts++;
         detector.detect(video)
           .then(results => {
             busy = false;
-            if (results.length > 0) record(results[0].rawValue);
+            if (results.length > 0) {
+              document.getElementById('cam-hint').textContent = '✓ 识别到！';
+              record(results[0].rawValue);
+            } else if (attempts % 60 === 0) {
+              document.getElementById('cam-hint').textContent = `扫描中 (${attempts}帧)`;
+            }
           })
-          .catch(() => { busy = false; });
+          .catch(e => {
+            busy = false;
+            document.getElementById('cam-hint').textContent = '识别出错: ' + e.message;
+          });
       }
       detectLoop();
       return;
