@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="theme-color" content="#0f172a">
   <title>GOFO 扫码记录</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -16,114 +17,120 @@
     }
     html, body { height: 100%; background: var(--bg); color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    #app { display: flex; flex-direction: column; height: 100dvh;
+      max-width: 480px; margin: 0 auto; }
 
-    #app { display: flex; flex-direction: column; height: 100dvh; max-width: 480px; margin: 0 auto; }
-
-    /* Header */
     .header { display: flex; align-items: center; justify-content: space-between;
       padding: 14px 20px 10px; flex-shrink: 0; }
     .header-title { font-size: 20px; font-weight: 700; }
     .header-badge { background: var(--accent); border-radius: 20px;
       padding: 4px 12px; font-size: 13px; font-weight: 600; }
 
-    /* Tabs */
-    .tabs { display: flex; margin: 0 20px 14px; background: var(--card);
+    .tabs { display: flex; margin: 0 20px 12px; background: var(--card);
       border-radius: 10px; padding: 4px; gap: 4px; flex-shrink: 0; }
     .tab { flex: 1; padding: 9px; border: none; border-radius: 7px;
       background: transparent; color: var(--sub); font-size: 14px;
-      font-weight: 500; cursor: pointer; transition: all .15s; }
+      font-weight: 500; cursor: pointer; }
     .tab.active { background: var(--accent); color: #fff; font-weight: 700; }
 
     /* ── Scan Tab ── */
     #tab-scan { display: flex; flex-direction: column; flex: 1;
-      padding: 0 20px 24px; gap: 16px; overflow: hidden; }
+      padding: 0 20px 16px; gap: 12px; overflow: hidden; }
 
-    /* The big input — always focused */
-    .scan-input-wrap { position: relative; }
-    .scan-input {
-      width: 100%; padding: 20px 52px 20px 20px;
-      background: var(--card); border: 2px solid var(--accent);
-      border-radius: 16px; color: var(--text);
-      font-size: 18px; font-weight: 600; font-family: monospace;
-      letter-spacing: 0.5px; outline: none;
-      caret-color: var(--accent);
-      -webkit-user-select: text; user-select: text;
-    }
-    .scan-input::placeholder { color: var(--sub); font-weight: 400;
-      font-family: -apple-system, sans-serif; font-size: 15px; letter-spacing: 0; }
-    .scan-input.flash { border-color: var(--success); background: rgba(34,197,94,.08); }
-    .scan-input.dup   { border-color: var(--danger);  background: rgba(239,68,68,.08); }
-    .clear-input-btn {
-      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-      background: var(--border); border: none; border-radius: 50%;
-      width: 28px; height: 28px; color: var(--sub); font-size: 16px;
-      cursor: pointer; display: none; align-items: center; justify-content: center;
-    }
-    .scan-hint-text { text-align: center; color: var(--sub); font-size: 13px; }
+    /* Camera */
+    .camera-wrap { position: relative; border-radius: 14px; overflow: hidden;
+      background: #000; height: 220px; flex-shrink: 0; }
+    #reader { width: 100% !important; height: 100% !important; border: none !important; }
+    #reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
+    #reader__dashboard, #reader__scan_region > img { display: none !important; }
+    .cam-overlay { position: absolute; inset: 0; pointer-events: none;
+      display: flex; align-items: center; justify-content: center; }
+    .cam-frame { width: 75%; height: 100px; position: relative; }
+    .corner { position: absolute; width: 20px; height: 20px;
+      border-color: var(--accent); border-style: solid; }
+    .c-tl { top:0;left:0; border-width:3px 0 0 3px; }
+    .c-tr { top:0;right:0; border-width:3px 3px 0 0; }
+    .c-bl { bottom:0;left:0; border-width:0 0 3px 3px; }
+    .c-br { bottom:0;right:0; border-width:0 3px 3px 0; }
+    .scan-line { position:absolute; left:3px; right:3px; height:2px;
+      background:var(--accent); opacity:.8;
+      animation: scanline 1.8s ease-in-out infinite alternate; }
+    @keyframes scanline { from{top:3px} to{top:calc(100% - 5px)} }
+    .cam-hint { position:absolute; bottom:8px; left:0; right:0; text-align:center;
+      font-size:12px; color:rgba(255,255,255,.6); }
+    .start-overlay { position:absolute; inset:0; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:10px; background:rgba(0,0,0,.5);
+      border-radius:14px; }
+    .start-btn { background:var(--accent); color:#fff; border:none; border-radius:12px;
+      padding:12px 28px; font-size:15px; font-weight:700; cursor:pointer; }
+    .start-hint { font-size:12px; color:var(--sub); text-align:center; padding:0 16px; }
+
+    /* Manual input */
+    .input-row { display:flex; gap:8px; flex-shrink:0; }
+    .scan-input { flex:1; padding:14px 16px; background:var(--card);
+      border:1.5px solid var(--border); border-radius:12px; color:var(--text);
+      font-size:16px; font-family:monospace; outline:none; }
+    .scan-input:focus { border-color:var(--accent); }
+    .scan-input::placeholder { color:var(--sub); font-family:-apple-system,sans-serif;
+      font-size:14px; }
+    .submit-btn { background:var(--accent); color:#fff; border:none; border-radius:12px;
+      padding:14px 18px; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap; }
 
     /* Last scan */
-    .last-scan { background: var(--card); border-radius: 12px;
-      padding: 14px 16px; border: 1px solid var(--border); flex-shrink: 0; }
-    .last-scan-label { font-size: 11px; color: var(--sub); font-weight: 500;
-      text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
-    .last-scan-value { font-size: 17px; font-weight: 700;
-      font-family: 'SF Mono', monospace; letter-spacing: .5px; word-break: break-all; }
-    .last-scan-value.new { color: var(--success); }
-    .last-scan-value.dup { color: var(--danger); }
+    .last-scan { background:var(--card); border-radius:12px; padding:12px 16px;
+      border:1px solid var(--border); flex-shrink:0; }
+    .last-label { font-size:11px; color:var(--sub); font-weight:500;
+      text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+    .last-value { font-size:16px; font-weight:700; font-family:monospace;
+      letter-spacing:.3px; word-break:break-all; }
+    .last-value.ok  { color:var(--success); }
+    .last-value.dup { color:var(--danger); }
 
-    /* Recent list in scan tab */
-    .recent-label { font-size: 12px; color: var(--sub); font-weight: 500;
-      text-transform: uppercase; letter-spacing: .5px; flex-shrink: 0; }
-    .recent-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-    .recent-item { display: flex; align-items: center; gap: 10px;
-      padding: 10px 12px; background: var(--card); border-radius: 8px;
-      margin-bottom: 6px; border: 1px solid var(--border); }
-    .recent-num { width: 28px; height: 28px; border-radius: 50%;
-      background: rgba(59,130,246,.15); display: flex; align-items: center;
-      justify-content: center; flex-shrink: 0; }
-    .recent-num-text { color: var(--accent); font-size: 12px; font-weight: 700; }
-    .recent-tracking { flex: 1; font-size: 14px; font-weight: 600;
-      font-family: monospace; min-width: 0; overflow: hidden;
-      text-overflow: ellipsis; white-space: nowrap; }
-    .recent-time { font-size: 11px; color: var(--sub); flex-shrink: 0; }
+    /* Recent */
+    .section-label { font-size:12px; color:var(--sub); font-weight:500;
+      text-transform:uppercase; letter-spacing:.5px; flex-shrink:0; }
+    .recent-list { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+    .recent-item { display:flex; align-items:center; gap:10px; padding:9px 12px;
+      background:var(--card); border-radius:8px; margin-bottom:6px;
+      border:1px solid var(--border); }
+    .r-num { width:26px; height:26px; border-radius:50%; background:rgba(59,130,246,.15);
+      display:flex; align-items:center; justify-content:center; flex-shrink:0;
+      font-size:12px; font-weight:700; color:var(--accent); }
+    .r-no { flex:1; font-size:14px; font-weight:600; font-family:monospace;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .r-time { font-size:11px; color:var(--sub); flex-shrink:0; }
 
     /* ── List Tab ── */
-    #tab-list { display: none; flex-direction: column; flex: 1;
-      overflow: hidden; padding: 0 20px 20px; }
-    .list-actions { display: flex; gap: 10px; margin-bottom: 14px; flex-shrink: 0; }
-    .btn-export { flex: 1; background: var(--accent); color: #fff; border: none;
-      border-radius: 10px; padding: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
-    .btn-export:active { opacity: .8; }
-    .btn-clear { background: transparent; color: var(--danger);
-      border: 1px solid var(--danger); border-radius: 10px;
-      padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; }
-    .btn-clear:active { opacity: .7; }
-    .records-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-    .record-item { display: flex; align-items: center; gap: 12px;
-      background: var(--card); border-radius: 10px; padding: 12px;
-      margin-bottom: 8px; border: 1px solid var(--border); }
-    .record-index { width: 32px; height: 32px; border-radius: 50%;
-      background: rgba(59,130,246,.15); display: flex; align-items: center;
-      justify-content: center; flex-shrink: 0; }
-    .record-index-text { color: var(--accent); font-size: 13px; font-weight: 700; }
-    .record-body { flex: 1; min-width: 0; }
-    .record-tracking { font-size: 15px; font-weight: 600; font-family: monospace;
-      letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .record-meta { font-size: 11px; color: var(--sub); margin-top: 3px; }
-    .record-copy { background: var(--border); border: none; border-radius: 6px;
-      color: var(--sub); font-size: 11px; padding: 4px 8px; cursor: pointer; flex-shrink: 0; }
-    .record-copy:active { background: var(--accent); color: #fff; }
-    .empty-state { flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 8px; }
-    .empty-title { color: var(--sub); font-size: 17px; font-weight: 600; }
-    .empty-hint { color: var(--border); font-size: 13px; }
+    #tab-list { display:none; flex-direction:column; flex:1;
+      overflow:hidden; padding:0 20px 20px; }
+    .list-actions { display:flex; gap:10px; margin-bottom:14px; flex-shrink:0; }
+    .btn-export { flex:1; background:var(--accent); color:#fff; border:none;
+      border-radius:10px; padding:12px; font-size:15px; font-weight:700; cursor:pointer; }
+    .btn-clear { background:transparent; color:var(--danger);
+      border:1px solid var(--danger); border-radius:10px;
+      padding:12px 18px; font-size:15px; font-weight:600; cursor:pointer; }
+    .records-scroll { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+    .record-item { display:flex; align-items:center; gap:12px; background:var(--card);
+      border-radius:10px; padding:12px; margin-bottom:8px; border:1px solid var(--border); }
+    .rec-idx { width:32px; height:32px; border-radius:50%; background:rgba(59,130,246,.15);
+      display:flex; align-items:center; justify-content:center; flex-shrink:0;
+      font-size:13px; font-weight:700; color:var(--accent); }
+    .rec-body { flex:1; min-width:0; }
+    .rec-no { font-size:15px; font-weight:600; font-family:monospace;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rec-time { font-size:11px; color:var(--sub); margin-top:2px; }
+    .btn-copy { background:var(--border); border:none; border-radius:6px;
+      color:var(--sub); font-size:11px; padding:4px 8px; cursor:pointer; flex-shrink:0; }
+    .empty { flex:1; display:flex; flex-direction:column; align-items:center;
+      justify-content:center; gap:8px; }
+    .empty-t { color:var(--sub); font-size:17px; font-weight:600; }
+    .empty-s { color:var(--border); font-size:13px; }
 
-    /* Toast */
-    .toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
-      color: #fff; padding: 10px 20px; border-radius: 24px; font-size: 14px;
-      font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none;
-      white-space: nowrap; z-index: 999; }
-    .toast.show { opacity: 1; }
+    .toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%);
+      color:#fff; padding:10px 20px; border-radius:24px; font-size:14px;
+      font-weight:600; opacity:0; transition:opacity .2s; pointer-events:none;
+      white-space:nowrap; z-index:999; }
+    .toast.show { opacity:1; }
   </style>
 </head>
 <body>
@@ -132,30 +139,45 @@
     <span class="header-title">GOFO 扫码记录</span>
     <span class="header-badge" id="badge">0 票</span>
   </div>
-
   <div class="tabs">
     <button class="tab active" onclick="switchTab('scan')">扫　码</button>
-    <button class="tab" id="tab-list-btn" onclick="switchTab('list')">记录 (<span id="count">0</span>)</button>
+    <button class="tab" onclick="switchTab('list')">记录 (<span id="count">0</span>)</button>
   </div>
 
   <!-- Scan Tab -->
   <div id="tab-scan">
-    <!-- Always-focused input: works with PDA scanner / Bluetooth scanner -->
-    <div class="scan-input-wrap">
+    <!-- Camera -->
+    <div class="camera-wrap">
+      <div id="reader"></div>
+      <div class="cam-overlay">
+        <div class="cam-frame">
+          <div class="corner c-tl"></div><div class="corner c-tr"></div>
+          <div class="corner c-bl"></div><div class="corner c-br"></div>
+          <div class="scan-line" id="scan-line" style="display:none"></div>
+        </div>
+      </div>
+      <div class="cam-hint" id="cam-hint" style="display:none">对准条形码 / 二维码</div>
+      <div class="start-overlay" id="start-overlay">
+        <button class="start-btn" onclick="startCamera()">📷 开启摄像头</button>
+        <span class="start-hint" id="start-hint">点击后允许摄像头权限</span>
+      </div>
+    </div>
+
+    <!-- Manual / PDA input -->
+    <div class="input-row">
       <input id="scan-input" class="scan-input" type="text"
-        placeholder="对准条形码扫描，或手动输入运单号"
-        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-        inputmode="text" enterkeyhint="done" />
-      <button class="clear-input-btn" id="clear-btn" onclick="clearInput()">✕</button>
+        placeholder="扫码枪 / 手动输入运单号"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <button class="submit-btn" onclick="submitInput()">确认</button>
     </div>
-    <p class="scan-hint-text">扫描枪 / 手机蓝牙扫码器 → 自动记录 ·  手动输入后按回车</p>
 
+    <!-- Last scan -->
     <div class="last-scan">
-      <div class="last-scan-label">最近扫描</div>
-      <div class="last-scan-value" id="last-value">—</div>
+      <div class="last-label">最近扫描</div>
+      <div class="last-value" id="last-value">—</div>
     </div>
 
-    <div class="recent-label">本次记录</div>
+    <div class="section-label">本次记录</div>
     <div class="recent-list" id="recent-list"></div>
   </div>
 
@@ -165,201 +187,191 @@
       <button class="btn-export" onclick="exportCSV()">导出 CSV</button>
       <button class="btn-clear" id="btn-clear" style="display:none" onclick="clearAll()">清空</button>
     </div>
-    <div class="records-list" id="records-list">
-      <div class="empty-state" id="empty-state">
-        <div class="empty-title">暂无记录</div>
-        <div class="empty-hint">扫码后记录显示在这里</div>
-      </div>
-    </div>
+    <div class="records-scroll" id="records-scroll"></div>
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
 
 <script>
-  const STORAGE_KEY = 'gofo_records';
-  let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  let scannedSet = new Set(records.map(r => r.trackingNo));
+const STORAGE_KEY = 'gofo_records';
+let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+let scannedSet = new Set(records.map(r => r.trackingNo));
+let lastCooldown = { v: null, t: 0 };
+let camStarted = false;
 
-  const inputEl = document.getElementById('scan-input');
-  const clearBtn = document.getElementById('clear-btn');
+// ── Init ──
+updateUI();
+setupPDA();
 
-  // ── Init ──
-  updateUI();
-  keepFocus();
+// URL param from iOS Shortcut
+(() => {
+  const v = new URLSearchParams(location.search).get('add');
+  if (v) { history.replaceState(null,'',location.pathname); setTimeout(()=>record(v.trim()),300); }
+})();
 
-  // Check URL param ?add=TRACKINGNO (from iOS Shortcut)
-  (() => {
-    const val = new URLSearchParams(location.search).get('add');
-    if (!val) return;
-    history.replaceState(null, '', location.pathname);
-    setTimeout(() => record(val.trim()), 300);
-  })();
+// ── PDA / keyboard wedge ──
+function setupPDA() {
+  const inp = document.getElementById('scan-input');
+  let autoTimer;
 
-  // ── Keep input focused (PDA scanner needs this) ──
-  function keepFocus() {
-    inputEl.focus();
-    // Re-focus if user taps elsewhere (but not on tab-list or buttons)
-    document.addEventListener('touchend', e => {
-      if (!e.target.closest('#tab-list') && !e.target.closest('.tabs') &&
-          !e.target.closest('.list-actions') && !e.target.closest('.record-copy')) {
-        setTimeout(() => inputEl.focus(), 50);
-      }
-    });
-    document.addEventListener('click', e => {
-      if (!e.target.closest('#tab-list') && !e.target.closest('.tabs') &&
-          !e.target.closest('.list-actions') && !e.target.closest('.record-copy')) {
-        inputEl.focus();
-      }
-    });
-  }
-
-  // ── Input events ──
-  inputEl.addEventListener('input', () => {
-    clearBtn.style.display = inputEl.value ? 'flex' : 'none';
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); const v = inp.value.trim(); if (v) { inp.value=''; submitVal(v); } }
   });
-
-  // PDA scanners send Enter after each scan — also handles manual entry
-  inputEl.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.keyCode === 13) {
-      e.preventDefault();
-      const val = inputEl.value.trim();
-      if (val) submit(val);
-    }
-  });
-
-  // Some PDA scanners don't send keydown but fire change rapidly — catch via input event
-  // If input value length > 5 and no input for 150ms → auto-submit (PDA fast-paste)
-  let autoTimer = null;
-  inputEl.addEventListener('input', () => {
+  inp.addEventListener('input', () => {
     clearTimeout(autoTimer);
-    if (inputEl.value.trim().length >= 6) {
-      autoTimer = setTimeout(() => {
-        const val = inputEl.value.trim();
-        if (val) submit(val);
-      }, 150);
-    }
+    if (inp.value.trim().length >= 6) autoTimer = setTimeout(() => { const v=inp.value.trim(); if(v){inp.value='';submitVal(v);} }, 150);
   });
+}
+function submitInput() { const inp=document.getElementById('scan-input'); const v=inp.value.trim(); if(v){inp.value='';submitVal(v);} }
+function submitVal(v) { record(v); }
 
-  function clearInput() {
-    inputEl.value = '';
-    clearBtn.style.display = 'none';
-    inputEl.focus();
-  }
+// ── Camera ──
+async function startCamera() {
+  if (camStarted) return;
+  document.getElementById('start-overlay').style.display = 'none';
 
-  function submit(val) {
-    inputEl.value = '';
-    clearBtn.style.display = 'none';
-    clearTimeout(autoTimer);
-    inputEl.focus();
-    record(val);
-  }
+  // Try native BarcodeDetector first (iOS 17+, Android Chrome)
+  if ('BarcodeDetector' in window) {
+    try {
+      const supported = await BarcodeDetector.getSupportedFormats().catch(() => []);
+      const want = ['code_128','code_39','code_93','codabar','ean_13','ean_8',
+                    'upc_a','upc_e','itf','pdf417','data_matrix','qr_code','aztec'];
+      const formats = supported.length ? want.filter(f => supported.includes(f)) : want;
+      const detector = new BarcodeDetector({ formats });
 
-  // ── Record tracking number ──
-  function record(trackingNo) {
-    const el = document.getElementById('last-value');
-    el.textContent = trackingNo;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal:'environment' } }
+      });
+      const video = document.createElement('video');
+      video.setAttribute('playsinline',''); video.setAttribute('muted','');
+      video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
+      document.getElementById('reader').appendChild(video);
+      video.srcObject = stream;
+      await video.play();
 
-    if (scannedSet.has(trackingNo)) {
-      el.className = 'last-scan-value dup';
-      inputEl.classList.add('dup');
-      setTimeout(() => inputEl.classList.remove('dup'), 600);
-      showToast('⚠︎ 已记录过', 'warn');
-      if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+      camStarted = true;
+      document.getElementById('scan-line').style.display = 'block';
+      document.getElementById('cam-hint').style.display = 'block';
+      document.getElementById('cam-hint').textContent = '🚀 原生识别中';
+
+      // Simple interval — one detect at a time
+      let busy = false;
+      setInterval(() => {
+        if (busy || video.readyState < 2) return;
+        busy = true;
+        detector.detect(video).then(r => { busy=false; if(r.length) record(r[0].rawValue); }).catch(()=>busy=false);
+      }, 200);
       return;
-    }
-
-    scannedSet.add(trackingNo);
-    el.className = 'last-scan-value new';
-    setTimeout(() => el.classList.remove('new'), 1500);
-    inputEl.classList.add('flash');
-    setTimeout(() => inputEl.classList.remove('flash'), 500);
-    if (navigator.vibrate) navigator.vibrate(60);
-
-    const rec = {
-      id: String(Date.now()),
-      trackingNo,
-      time: new Date().toLocaleString('zh-CN', { hour12: false }),
-    };
-    records.unshift(rec);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    updateUI();
-    showToast('✓ ' + trackingNo);
+    } catch(e) { console.warn('Native failed, trying library:', e); }
   }
 
-  // ── UI ──
-  function switchTab(tab) {
-    const isScan = tab === 'scan';
-    document.getElementById('tab-scan').style.display = isScan ? 'flex' : 'none';
-    document.getElementById('tab-list').style.display = isScan ? 'none' : 'flex';
-    document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', isScan ? i === 0 : i === 1));
-    if (isScan) setTimeout(() => inputEl.focus(), 100);
+  // Fallback: html5-qrcode (older browsers)
+  try {
+    document.getElementById('reader').innerHTML = '';
+    const scanner = new Html5Qrcode('reader', { verbose: false });
+    await scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 240, height: 120 } },
+      data => record(data), () => {}
+    );
+    camStarted = true;
+    document.getElementById('scan-line').style.display = 'block';
+    document.getElementById('cam-hint').style.display = 'block';
+    document.getElementById('cam-hint').textContent = '对准条形码 / 二维码';
+  } catch(e) {
+    document.getElementById('start-overlay').style.display = 'flex';
+    const msg = e?.name==='NotAllowedError'||String(e).includes('NotAllowed')
+      ? '请在浏览器设置里允许摄像头权限，再刷新重试'
+      : '摄像头启动失败：' + (e?.message || String(e));
+    document.getElementById('start-hint').textContent = msg;
+  }
+}
+
+// ── Record ──
+function record(trackingNo) {
+  const now = Date.now();
+  // Cooldown: same value within 2s skip (camera fires continuously)
+  if (trackingNo === lastCooldown.v && now - lastCooldown.t < 2000) return;
+  lastCooldown = { v: trackingNo, t: now };
+
+  const el = document.getElementById('last-value');
+  el.textContent = trackingNo;
+
+  if (scannedSet.has(trackingNo)) {
+    el.className = 'last-value dup';
+    showToast('⚠︎ 已记录过', 'warn');
+    if (navigator.vibrate) navigator.vibrate([40,40,40]);
+    return;
   }
 
-  function updateUI() {
-    const n = records.length;
-    document.getElementById('badge').textContent = n + ' 票';
-    document.getElementById('count').textContent = n;
-    document.getElementById('btn-clear').style.display = n > 0 ? 'block' : 'none';
-    document.getElementById('empty-state').style.display = n === 0 ? 'flex' : 'none';
+  scannedSet.add(trackingNo);
+  el.className = 'last-value ok';
+  setTimeout(() => el.classList.remove('ok'), 1500);
+  if (navigator.vibrate) navigator.vibrate(60);
 
-    // Recent list (scan tab — latest 20)
-    document.getElementById('recent-list').innerHTML = records.slice(0, 20).map((r, i) => `
-      <div class="recent-item">
-        <div class="recent-num"><span class="recent-num-text">${n - i}</span></div>
-        <span class="recent-tracking">${escHtml(r.trackingNo)}</span>
-        <span class="recent-time">${r.time.split(' ')[1] || r.time}</span>
-      </div>`).join('');
+  records.unshift({ id: String(now), trackingNo, time: new Date().toLocaleString('zh-CN',{hour12:false}) });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  updateUI();
+  showToast('✓ ' + trackingNo);
+}
 
-    // Full list (list tab)
-    document.getElementById('records-list').innerHTML =
-      (n === 0 ? '<div class="empty-state"><div class="empty-title">暂无记录</div><div class="empty-hint">扫码后记录显示在这里</div></div>' : '') +
-      records.map((r, i) => `
+// ── UI ──
+function switchTab(t) {
+  const s = t==='scan';
+  document.getElementById('tab-scan').style.display = s?'flex':'none';
+  document.getElementById('tab-list').style.display = s?'none':'flex';
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',s?i===0:i===1));
+}
+
+function updateUI() {
+  const n = records.length;
+  document.getElementById('badge').textContent = n+' 票';
+  document.getElementById('count').textContent = n;
+  document.getElementById('btn-clear').style.display = n?'block':'none';
+
+  document.getElementById('recent-list').innerHTML = records.slice(0,30).map((r,i)=>`
+    <div class="recent-item">
+      <div class="r-num">${n-i}</div>
+      <span class="r-no">${esc(r.trackingNo)}</span>
+      <span class="r-time">${r.time.split(' ')[1]||r.time}</span>
+    </div>`).join('');
+
+  document.getElementById('records-scroll').innerHTML = n===0
+    ? '<div class="empty"><div class="empty-t">暂无记录</div><div class="empty-s">扫码后显示在这里</div></div>'
+    : records.map((r,i)=>`
       <div class="record-item">
-        <div class="record-index"><span class="record-index-text">${n - i}</span></div>
-        <div class="record-body">
-          <div class="record-tracking">${escHtml(r.trackingNo)}</div>
-          <div class="record-meta">${r.time}</div>
-        </div>
-        <button class="record-copy" onclick="copyText('${escHtml(r.trackingNo)}')">复制</button>
+        <div class="rec-idx">${n-i}</div>
+        <div class="rec-body"><div class="rec-no">${esc(r.trackingNo)}</div><div class="rec-time">${r.time}</div></div>
+        <button class="btn-copy" onclick="cp('${esc(r.trackingNo)}')">复制</button>
       </div>`).join('');
-  }
+}
 
-  // ── Export ──
-  function exportCSV() {
-    if (!records.length) { showToast('暂无记录'); return; }
-    const csv = '﻿运单号,扫描时间\n' + records.map(r => `"${r.trackingNo}","${r.time}"`).join('\n');
-    const a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })),
-      download: `GOFO扫码记录_${new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')}.csv`
-    });
-    a.click();
-    showToast('CSV 已导出');
-  }
+function exportCSV() {
+  if (!records.length) { showToast('暂无记录'); return; }
+  const csv = '﻿运单号,扫描时间\n' + records.map(r=>`"${r.trackingNo}","${r.time}"`).join('\n');
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),
+    download: `GOFO扫码记录_${new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')}.csv`
+  });
+  a.click(); showToast('CSV 已导出');
+}
 
-  function clearAll() {
-    if (!confirm(`确认清空全部 ${records.length} 条记录？`)) return;
-    records = []; scannedSet.clear();
-    localStorage.removeItem(STORAGE_KEY);
-    updateUI(); showToast('已清空');
-  }
+function clearAll() {
+  if (!confirm(`确认清空全部 ${records.length} 条记录？`)) return;
+  records=[]; scannedSet.clear(); lastCooldown={v:null,t:0};
+  localStorage.removeItem(STORAGE_KEY); updateUI(); showToast('已清空');
+}
 
-  function copyText(t) { navigator.clipboard?.writeText(t).then(() => showToast('已复制')); }
+function cp(t) { navigator.clipboard?.writeText(t).then(()=>showToast('已复制')); }
 
-  // ── Toast ──
-  let toastTimer;
-  function showToast(msg, type = 'ok') {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.background = type === 'warn' ? 'var(--danger)' : 'var(--success)';
-    t.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
-  }
-
-  function escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+let toastTimer;
+function showToast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent=msg; t.style.background=type==='warn'?'var(--danger)':'var(--success)';
+  t.classList.add('show'); clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'),2000);
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 </script>
 </body>
 </html>
