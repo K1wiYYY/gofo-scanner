@@ -280,20 +280,23 @@ async function startCamera() {
   if (camStarted) return;
   document.getElementById('start-overlay').style.display = 'none';
 
-  // Try native BarcodeDetector first (iOS 17+, Android Chrome)
   if ('BarcodeDetector' in window) {
     try {
-      const supported = await BarcodeDetector.getSupportedFormats().catch(() => []);
-      const want = ['code_128','code_39','code_93','codabar','ean_13','ean_8',
-                    'upc_a','upc_e','itf','pdf417','data_matrix','qr_code','aztec'];
-      const formats = supported.length ? want.filter(f => supported.includes(f)) : want;
+      // Get only supported formats
+      const allFormats = ['code_128','code_39','code_93','codabar','ean_13','ean_8',
+                          'upc_a','upc_e','itf','pdf417','data_matrix','qr_code','aztec'];
+      const supported = await BarcodeDetector.getSupportedFormats().catch(() => allFormats);
+      const formats = supported.length ? allFormats.filter(f => supported.includes(f)) : allFormats;
       const detector = new BarcodeDetector({ formats });
 
+      // 720p: enough detail for barcodes, not too heavy
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal:'environment' } }
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
       });
+
       const video = document.createElement('video');
-      video.setAttribute('playsinline',''); video.setAttribute('muted','');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('muted', '');
       video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
       document.getElementById('reader').appendChild(video);
       video.srcObject = stream;
@@ -302,26 +305,36 @@ async function startCamera() {
       camStarted = true;
       document.getElementById('scan-line').style.display = 'block';
       document.getElementById('cam-hint').style.display = 'block';
-      document.getElementById('cam-hint').textContent = '🚀 原生识别中';
+      document.getElementById('cam-hint').textContent = '对准条形码 / 二维码';
 
-      // Simple interval — one detect at a time
+      // RAF loop: detect immediately after each result, as fast as device allows
       let busy = false;
-      setInterval(() => {
+      function detectLoop() {
+        if (!camStarted) return;
+        requestAnimationFrame(detectLoop);
         if (busy || video.readyState < 2) return;
         busy = true;
-        detector.detect(video).then(r => { busy=false; if(r.length) record(r[0].rawValue); }).catch(()=>busy=false);
-      }, 200);
+        detector.detect(video)
+          .then(results => {
+            busy = false;
+            if (results.length > 0) record(results[0].rawValue);
+          })
+          .catch(() => { busy = false; });
+      }
+      detectLoop();
       return;
-    } catch(e) { console.warn('Native failed, trying library:', e); }
+    } catch(e) {
+      console.warn('Native BarcodeDetector failed:', e);
+      document.getElementById('reader').innerHTML = '';
+    }
   }
 
-  // Fallback: html5-qrcode (older browsers)
+  // Fallback: html5-qrcode
   try {
-    document.getElementById('reader').innerHTML = '';
     const scanner = new Html5Qrcode('reader', { verbose: false });
     await scanner.start(
       { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 240, height: 120 } },
+      { fps: 15, qrbox: { width: 250, height: 150 } },
       data => record(data), () => {}
     );
     camStarted = true;
@@ -330,8 +343,8 @@ async function startCamera() {
     document.getElementById('cam-hint').textContent = '对准条形码 / 二维码';
   } catch(e) {
     document.getElementById('start-overlay').style.display = 'flex';
-    const msg = e?.name==='NotAllowedError'||String(e).includes('NotAllowed')
-      ? '请在浏览器设置里允许摄像头权限，再刷新重试'
+    const msg = (e?.name === 'NotAllowedError' || String(e).includes('NotAllowed'))
+      ? '请允许摄像头权限，然后刷新页面'
       : '摄像头启动失败：' + (e?.message || String(e));
     document.getElementById('start-hint').textContent = msg;
   }
@@ -341,7 +354,7 @@ async function startCamera() {
 function record(trackingNo) {
   const now = Date.now();
   // Cooldown: same value within 2s skip (camera fires continuously)
-  if (trackingNo === lastCooldown.v && now - lastCooldown.t < 2000) return;
+  if (trackingNo === lastCooldown.v && now - lastCooldown.t < 1200) return;
   lastCooldown = { v: trackingNo, t: now };
 
   const el = document.getElementById('last-value');
