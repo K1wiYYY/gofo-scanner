@@ -7,377 +7,169 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="theme-color" content="#0f172a">
   <title>GOFO 扫码记录</title>
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg: #0f172a;
-      --card: #1e293b;
-      --border: #334155;
-      --accent: #3b82f6;
-      --accent-dim: rgba(59,130,246,0.15);
-      --text: #f1f5f9;
-      --sub: #94a3b8;
-      --danger: #ef4444;
-      --success: #22c55e;
+      --bg: #0f172a; --card: #1e293b; --border: #334155;
+      --accent: #3b82f6; --text: #f1f5f9; --sub: #94a3b8;
+      --danger: #ef4444; --success: #22c55e;
     }
+    html, body { height: 100%; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
-    html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      overflow: hidden;
-    }
+    #app { display: flex; flex-direction: column; height: 100dvh; max-width: 480px; margin: 0 auto; }
 
-    #app {
-      display: flex;
-      flex-direction: column;
-      height: 100dvh;
-      max-width: 480px;
-      margin: 0 auto;
-    }
+    /* Header */
+    .header { display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px 10px; flex-shrink: 0; }
+    .header-title { font-size: 20px; font-weight: 700; }
+    .header-badge { background: var(--accent); border-radius: 20px;
+      padding: 4px 12px; font-size: 13px; font-weight: 600; }
 
-    /* ── Header ── */
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 20px 10px;
-      flex-shrink: 0;
-    }
-    .header-title { font-size: 20px; font-weight: 700; letter-spacing: .3px; }
-    .header-badge {
-      background: var(--accent);
-      border-radius: 20px;
-      padding: 4px 12px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    /* ── Tabs ── */
-    .tabs {
-      display: flex;
-      margin: 0 20px 12px;
-      background: var(--card);
-      border-radius: 10px;
-      padding: 4px;
-      gap: 4px;
-      flex-shrink: 0;
-    }
-    .tab {
-      flex: 1;
-      padding: 9px;
-      border: none;
-      border-radius: 7px;
-      background: transparent;
-      color: var(--sub);
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all .15s;
-    }
+    /* Tabs */
+    .tabs { display: flex; margin: 0 20px 14px; background: var(--card);
+      border-radius: 10px; padding: 4px; gap: 4px; flex-shrink: 0; }
+    .tab { flex: 1; padding: 9px; border: none; border-radius: 7px;
+      background: transparent; color: var(--sub); font-size: 14px;
+      font-weight: 500; cursor: pointer; transition: all .15s; }
     .tab.active { background: var(--accent); color: #fff; font-weight: 700; }
 
     /* ── Scan Tab ── */
-    #tab-scan { display: flex; flex-direction: column; flex: 1; overflow: hidden; padding: 0 20px 20px; }
+    #tab-scan { display: flex; flex-direction: column; flex: 1;
+      padding: 0 20px 24px; gap: 16px; overflow: hidden; }
 
-    .camera-wrap {
-      position: relative;
-      border-radius: 16px;
-      overflow: hidden;
-      background: #000;
-      flex-shrink: 0;
-      height: 300px;
+    /* The big input — always focused */
+    .scan-input-wrap { position: relative; }
+    .scan-input {
+      width: 100%; padding: 20px 52px 20px 20px;
+      background: var(--card); border: 2px solid var(--accent);
+      border-radius: 16px; color: var(--text);
+      font-size: 18px; font-weight: 600; font-family: monospace;
+      letter-spacing: 0.5px; outline: none;
+      caret-color: var(--accent);
+      -webkit-user-select: text; user-select: text;
     }
+    .scan-input::placeholder { color: var(--sub); font-weight: 400;
+      font-family: -apple-system, sans-serif; font-size: 15px; letter-spacing: 0; }
+    .scan-input.flash { border-color: var(--success); background: rgba(34,197,94,.08); }
+    .scan-input.dup   { border-color: var(--danger);  background: rgba(239,68,68,.08); }
+    .clear-input-btn {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      background: var(--border); border: none; border-radius: 50%;
+      width: 28px; height: 28px; color: var(--sub); font-size: 16px;
+      cursor: pointer; display: none; align-items: center; justify-content: center;
+    }
+    .scan-hint-text { text-align: center; color: var(--sub); font-size: 13px; }
 
-    /* Override html5-qrcode default styles */
-    #reader {
-      width: 100% !important;
-      height: 100% !important;
-      border: none !important;
-    }
-    #reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
-    #reader img { display: none !important; }
-    #reader__scan_region { border: none !important; }
-    #reader__dashboard { display: none !important; }
-    #reader__scan_region > img { display: none !important; }
-
-    .viewfinder {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .vf-box {
-      position: relative;
-      width: 80%;
-      height: 120px;
-    }
-    .corner {
-      position: absolute;
-      width: 22px;
-      height: 22px;
-      border-color: var(--accent);
-      border-style: solid;
-    }
-    .c-tl { top:0; left:0; border-width: 3px 0 0 3px; }
-    .c-tr { top:0; right:0; border-width: 3px 3px 0 0; }
-    .c-bl { bottom:0; left:0; border-width: 0 0 3px 3px; }
-    .c-br { bottom:0; right:0; border-width: 0 3px 3px 0; }
-
-    .scan-line {
-      position: absolute;
-      left: 4px; right: 4px;
-      height: 2px;
-      background: var(--accent);
-      opacity: .85;
-      animation: scan 1.5s ease-in-out infinite alternate;
-    }
-    @keyframes scan { from { top: 4px; } to { top: calc(100% - 6px); } }
-
-    .scan-hint {
-      position: absolute;
-      bottom: 12px;
-      left: 0; right: 0;
-      text-align: center;
-      font-size: 12px;
-      color: rgba(255,255,255,.65);
-    }
-
-    .flash { animation: flash .25s ease-out; }
-    @keyframes flash {
-      0%   { opacity: 1; background: rgba(255,255,255,.5); }
-      100% { opacity: 0; background: transparent; }
-    }
-    .flash-overlay {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      border-radius: 16px;
-      opacity: 0;
-    }
-
-    /* Start button shown before camera starts */
-    .start-btn-wrap {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      background: rgba(0,0,0,.6);
-      border-radius: 16px;
-    }
-    .start-btn {
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 12px;
-      padding: 14px 32px;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .start-btn:active { opacity: .8; }
-    .start-hint { font-size: 13px; color: var(--sub); }
-
-    /* Last scan result */
-    .last-scan {
-      margin-top: 14px;
-      background: var(--card);
-      border-radius: 12px;
-      padding: 14px 16px;
-      border: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    .last-scan-label { font-size: 11px; color: var(--sub); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
-    .last-scan-value {
-      font-size: 17px;
-      font-weight: 700;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      letter-spacing: .5px;
-      color: var(--text);
-      word-break: break-all;
-    }
+    /* Last scan */
+    .last-scan { background: var(--card); border-radius: 12px;
+      padding: 14px 16px; border: 1px solid var(--border); flex-shrink: 0; }
+    .last-scan-label { font-size: 11px; color: var(--sub); font-weight: 500;
+      text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+    .last-scan-value { font-size: 17px; font-weight: 700;
+      font-family: 'SF Mono', monospace; letter-spacing: .5px; word-break: break-all; }
     .last-scan-value.new { color: var(--success); }
     .last-scan-value.dup { color: var(--danger); }
 
+    /* Recent list in scan tab */
+    .recent-label { font-size: 12px; color: var(--sub); font-weight: 500;
+      text-transform: uppercase; letter-spacing: .5px; flex-shrink: 0; }
+    .recent-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .recent-item { display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; background: var(--card); border-radius: 8px;
+      margin-bottom: 6px; border: 1px solid var(--border); }
+    .recent-num { width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(59,130,246,.15); display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; }
+    .recent-num-text { color: var(--accent); font-size: 12px; font-weight: 700; }
+    .recent-tracking { flex: 1; font-size: 14px; font-weight: 600;
+      font-family: monospace; min-width: 0; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; }
+    .recent-time { font-size: 11px; color: var(--sub); flex-shrink: 0; }
+
     /* ── List Tab ── */
-    #tab-list { display: none; flex-direction: column; flex: 1; overflow: hidden; padding: 0 20px 20px; }
-
-    .list-actions {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 14px;
-      flex-shrink: 0;
-    }
-    .btn-export {
-      flex: 1;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      padding: 12px;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-    }
+    #tab-list { display: none; flex-direction: column; flex: 1;
+      overflow: hidden; padding: 0 20px 20px; }
+    .list-actions { display: flex; gap: 10px; margin-bottom: 14px; flex-shrink: 0; }
+    .btn-export { flex: 1; background: var(--accent); color: #fff; border: none;
+      border-radius: 10px; padding: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
     .btn-export:active { opacity: .8; }
-    .btn-clear {
-      background: transparent;
-      color: var(--danger);
-      border: 1px solid var(--danger);
-      border-radius: 10px;
-      padding: 12px 18px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-    }
+    .btn-clear { background: transparent; color: var(--danger);
+      border: 1px solid var(--danger); border-radius: 10px;
+      padding: 12px 18px; font-size: 15px; font-weight: 600; cursor: pointer; }
     .btn-clear:active { opacity: .7; }
-
-    .records-list {
-      flex: 1;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    .empty-state {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
+    .records-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .record-item { display: flex; align-items: center; gap: 12px;
+      background: var(--card); border-radius: 10px; padding: 12px;
+      margin-bottom: 8px; border: 1px solid var(--border); }
+    .record-index { width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(59,130,246,.15); display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; }
+    .record-index-text { color: var(--accent); font-size: 13px; font-weight: 700; }
+    .record-body { flex: 1; min-width: 0; }
+    .record-tracking { font-size: 15px; font-weight: 600; font-family: monospace;
+      letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .record-meta { font-size: 11px; color: var(--sub); margin-top: 3px; }
+    .record-copy { background: var(--border); border: none; border-radius: 6px;
+      color: var(--sub); font-size: 11px; padding: 4px 8px; cursor: pointer; flex-shrink: 0; }
+    .record-copy:active { background: var(--accent); color: #fff; }
+    .empty-state { flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 8px; }
     .empty-title { color: var(--sub); font-size: 17px; font-weight: 600; }
     .empty-hint { color: var(--border); font-size: 13px; }
 
-    .record-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: var(--card);
-      border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 8px;
-      border: 1px solid var(--border);
-    }
-    .record-index {
-      width: 32px; height: 32px;
-      border-radius: 50%;
-      background: var(--accent-dim);
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .record-index-text { color: var(--accent); font-size: 13px; font-weight: 700; }
-    .record-body { flex: 1; min-width: 0; }
-    .record-tracking {
-      font-size: 15px;
-      font-weight: 600;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      letter-spacing: .3px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .record-meta { font-size: 11px; color: var(--sub); margin-top: 3px; }
-    .record-copy {
-      background: var(--border);
-      border: none;
-      border-radius: 6px;
-      color: var(--sub);
-      font-size: 11px;
-      padding: 4px 8px;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-    .record-copy:active { background: var(--accent); color: #fff; }
-
     /* Toast */
-    .toast {
-      position: fixed;
-      bottom: 32px;
-      left: 50%; transform: translateX(-50%);
-      background: var(--success);
-      color: #fff;
-      padding: 10px 20px;
-      border-radius: 24px;
-      font-size: 14px;
-      font-weight: 600;
-      opacity: 0;
-      transition: opacity .2s;
-      pointer-events: none;
-      white-space: nowrap;
-      z-index: 999;
-    }
+    .toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+      color: #fff; padding: 10px 20px; border-radius: 24px; font-size: 14px;
+      font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none;
+      white-space: nowrap; z-index: 999; }
     .toast.show { opacity: 1; }
   </style>
 </head>
 <body>
 <div id="app">
-  <!-- Header -->
   <div class="header">
     <span class="header-title">GOFO 扫码记录</span>
     <span class="header-badge" id="badge">0 票</span>
   </div>
 
-  <!-- Tabs -->
   <div class="tabs">
-    <button class="tab active" id="btn-tab-scan" onclick="switchTab('scan')">扫　码</button>
-    <button class="tab" id="btn-tab-list" onclick="switchTab('list')">记录 (<span id="count">0</span>)</button>
+    <button class="tab active" onclick="switchTab('scan')">扫　码</button>
+    <button class="tab" id="tab-list-btn" onclick="switchTab('list')">记录 (<span id="count">0</span>)</button>
   </div>
 
   <!-- Scan Tab -->
   <div id="tab-scan">
-    <div class="camera-wrap">
-      <div id="reader"></div>
-
-      <!-- Viewfinder overlay -->
-      <div class="viewfinder">
-        <div class="vf-box">
-          <div class="corner c-tl"></div>
-          <div class="corner c-tr"></div>
-          <div class="corner c-bl"></div>
-          <div class="corner c-br"></div>
-          <div class="scan-line" id="scan-line" style="display:none"></div>
-        </div>
-      </div>
-
-      <!-- Flash overlay -->
-      <div class="flash-overlay" id="flash-overlay"></div>
-
-      <!-- Start button -->
-      <div class="start-btn-wrap" id="start-wrap">
-        <button class="start-btn" onclick="startScanner()">开启摄像头</button>
-        <span class="start-hint">点击后请允许摄像头权限</span>
-      </div>
-
-      <span class="scan-hint" id="scan-hint-text" style="display:none"></span>
+    <!-- Always-focused input: works with PDA scanner / Bluetooth scanner -->
+    <div class="scan-input-wrap">
+      <input id="scan-input" class="scan-input" type="text"
+        placeholder="对准条形码扫描，或手动输入运单号"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        inputmode="text" enterkeyhint="done" />
+      <button class="clear-input-btn" id="clear-btn" onclick="clearInput()">✕</button>
     </div>
+    <p class="scan-hint-text">扫描枪 / 手机蓝牙扫码器 → 自动记录 ·  手动输入后按回车</p>
 
     <div class="last-scan">
       <div class="last-scan-label">最近扫描</div>
       <div class="last-scan-value" id="last-value">—</div>
     </div>
+
+    <div class="recent-label">本次记录</div>
+    <div class="recent-list" id="recent-list"></div>
   </div>
 
   <!-- List Tab -->
   <div id="tab-list">
     <div class="list-actions">
       <button class="btn-export" onclick="exportCSV()">导出 CSV</button>
-      <button class="btn-clear" onclick="clearAll()" id="btn-clear" style="display:none">清空</button>
+      <button class="btn-clear" id="btn-clear" style="display:none" onclick="clearAll()">清空</button>
     </div>
-    <div id="records-container" class="records-list">
+    <div class="records-list" id="records-list">
       <div class="empty-state" id="empty-state">
         <div class="empty-title">暂无记录</div>
-        <div class="empty-hint">切换到「扫码」标签开始扫码</div>
+        <div class="empty-hint">扫码后记录显示在这里</div>
       </div>
-      <div id="records-list"></div>
     </div>
   </div>
 </div>
@@ -386,192 +178,124 @@
 
 <script>
   const STORAGE_KEY = 'gofo_records';
-
   let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
   let scannedSet = new Set(records.map(r => r.trackingNo));
-  let scanner = null;
-  let scannerStarted = false;
-  let lastRecorded = { data: null, time: 0 };
+
+  const inputEl = document.getElementById('scan-input');
+  const clearBtn = document.getElementById('clear-btn');
 
   // ── Init ──
   updateUI();
+  keepFocus();
 
-  // Auto-record from URL param: ?add=TRACKINGNO (called by iOS Shortcut)
-  (function checkURLParam() {
-    const params = new URLSearchParams(location.search);
-    const val = params.get('add');
+  // Check URL param ?add=TRACKINGNO (from iOS Shortcut)
+  (() => {
+    const val = new URLSearchParams(location.search).get('add');
     if (!val) return;
-    // Clean URL without reload
     history.replaceState(null, '', location.pathname);
-    // Switch to scan tab to show result
-    switchTab('scan');
-    setTimeout(() => onScanSuccess(val), 300);
+    setTimeout(() => record(val.trim()), 300);
   })();
 
-  // ── Tab switching ──
-  function switchTab(tab) {
-    const isScan = tab === 'scan';
-    document.getElementById('tab-scan').style.display = isScan ? 'flex' : 'none';
-    document.getElementById('tab-list').style.display = isScan ? 'none' : 'flex';
-    document.getElementById('btn-tab-scan').classList.toggle('active', isScan);
-    document.getElementById('btn-tab-list').classList.toggle('active', !isScan);
+  // ── Keep input focused (PDA scanner needs this) ──
+  function keepFocus() {
+    inputEl.focus();
+    // Re-focus if user taps elsewhere (but not on tab-list or buttons)
+    document.addEventListener('touchend', e => {
+      if (!e.target.closest('#tab-list') && !e.target.closest('.tabs') &&
+          !e.target.closest('.list-actions') && !e.target.closest('.record-copy')) {
+        setTimeout(() => inputEl.focus(), 50);
+      }
+    });
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#tab-list') && !e.target.closest('.tabs') &&
+          !e.target.closest('.list-actions') && !e.target.closest('.record-copy')) {
+        inputEl.focus();
+      }
+    });
   }
 
-  // ── Scanner ──
-  let nativeDetector = null;
-  let nativeRafId = null;
-  let nativeVideo = null;
+  // ── Input events ──
+  inputEl.addEventListener('input', () => {
+    clearBtn.style.display = inputEl.value ? 'flex' : 'none';
+  });
 
-  // Use native BarcodeDetector on ALL platforms if available (iOS 17+, Android Chrome)
-  const useNative = 'BarcodeDetector' in window;
-
-  async function startScanner() {
-    if (scannerStarted) return;
-    document.getElementById('start-wrap').style.display = 'none';
-
-    if (useNative) {
-      await startNativeScanner();
-    } else {
-      await startLibraryScanner();
+  // PDA scanners send Enter after each scan — also handles manual entry
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.keyCode === 13) {
+      e.preventDefault();
+      const val = inputEl.value.trim();
+      if (val) submit(val);
     }
-  }
+  });
 
-  // ── Android Chrome: native BarcodeDetector (fast) ──
-  async function startNativeScanner() {
-    try {
-      // Only use formats the device actually supports
-      const allFormats = ['code_128','code_39','code_93','codabar','ean_13','ean_8',
-                          'upc_a','upc_e','itf','pdf417','data_matrix','qr_code','aztec'];
-      const supported = await BarcodeDetector.getSupportedFormats().catch(() => allFormats);
-      const formats = allFormats.filter(f => supported.includes(f));
-      nativeDetector = new BarcodeDetector({ formats: formats.length ? formats : allFormats });
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
-
-      nativeVideo = document.createElement('video');
-      nativeVideo.setAttribute('playsinline', '');
-      nativeVideo.setAttribute('muted', '');
-      nativeVideo.setAttribute('autoplay', '');
-      nativeVideo.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
-      document.getElementById('reader').appendChild(nativeVideo); // must be in DOM first on iOS
-      nativeVideo.srcObject = stream;
-      await nativeVideo.play();
-
-      scannerStarted = true;
-      document.getElementById('scan-line').style.display = 'block';
-      const hint = document.getElementById('scan-hint-text');
-      hint.textContent = '🚀 原生识别 · 对准条形码即可';
-      hint.style.display = 'block';
-
-      // Draw to a small canvas before detecting — much faster than full-res video
-      const snapCanvas = document.createElement('canvas');
-      snapCanvas.width = 640; snapCanvas.height = 480;
-      const snapCtx = snapCanvas.getContext('2d');
-
-      let detecting = false;
-      nativeRafId = setInterval(() => {
-        if (!scannerStarted || detecting || nativeVideo.readyState < 2) return;
-        snapCtx.drawImage(nativeVideo, 0, 0, 640, 480);
-        detecting = true;
-        nativeDetector.detect(snapCanvas)
-          .then(results => {
-            detecting = false;
-            if (results.length > 0) onScanSuccess(results[0].rawValue);
-          })
-          .catch(() => { detecting = false; });
-      }, 80); // ~12fps, fast enough without overwhelming the CPU
-    } catch (err) {
-      console.warn('Native scanner failed, falling back:', err);
-      // Clear any partial native setup before fallback
-      const readerEl = document.getElementById('reader');
-      if (nativeVideo) { try { nativeVideo.srcObject?.getTracks().forEach(t => t.stop()); } catch(_){} }
-      readerEl.innerHTML = '';
-      await startLibraryScanner();
+  // Some PDA scanners don't send keydown but fire change rapidly — catch via input event
+  // If input value length > 5 and no input for 150ms → auto-submit (PDA fast-paste)
+  let autoTimer = null;
+  inputEl.addEventListener('input', () => {
+    clearTimeout(autoTimer);
+    if (inputEl.value.trim().length >= 6) {
+      autoTimer = setTimeout(() => {
+        const val = inputEl.value.trim();
+        if (val) submit(val);
+      }, 150);
     }
+  });
+
+  function clearInput() {
+    inputEl.value = '';
+    clearBtn.style.display = 'none';
+    inputEl.focus();
   }
 
-  // ── iOS Safari: html5-qrcode JS library (fallback) ──
-  async function startLibraryScanner() {
-    const formats = [
-      Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.CODE_93,  Html5QrcodeSupportedFormats.CODABAR,
-      Html5QrcodeSupportedFormats.EAN_13,   Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,    Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.ITF,      Html5QrcodeSupportedFormats.PDF_417,
-      Html5QrcodeSupportedFormats.DATA_MATRIX, Html5QrcodeSupportedFormats.QR_CODE,
-      Html5QrcodeSupportedFormats.AZTEC,
-    ];
-    scanner = new Html5Qrcode('reader', { formatsToSupport: formats, verbose: false });
-    try {
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        onScanSuccess,
-        () => {}
-      );
-      scannerStarted = true;
-      document.getElementById('scan-line').style.display = 'block';
-      const hint2 = document.getElementById('scan-hint-text');
-      hint2.textContent = '对准条形码，无需精确对齐';
-      hint2.style.display = 'block';
-    } catch (err) {
-      document.getElementById('start-wrap').style.display = 'flex';
-      // err may be a string (html5-qrcode) or an Error object
-      const errStr = typeof err === 'string' ? err : (err?.message || err?.name || JSON.stringify(err));
-      const msg = (errStr.includes('NotAllowed') || errStr.includes('Permission'))
-                    ? '请允许摄像头权限：浏览器地址栏 → 点锁头图标 → 摄像头 → 允许，然后刷新'
-                : errStr.includes('NotFound')
-                    ? '未检测到摄像头，请检查设备'
-                : errStr.includes('NotReadable') || errStr.includes('busy')
-                    ? '摄像头被其他应用占用，请关闭后刷新重试'
-                : '启动失败：' + errStr;
-      document.querySelector('.start-hint').textContent = msg;
-      console.error('Scanner error:', err);
-    }
+  function submit(val) {
+    inputEl.value = '';
+    clearBtn.style.display = 'none';
+    clearTimeout(autoTimer);
+    inputEl.focus();
+    record(val);
   }
 
-  function onScanSuccess(data) {
-    const now = Date.now();
+  // ── Record tracking number ──
+  function record(trackingNo) {
+    const el = document.getElementById('last-value');
+    el.textContent = trackingNo;
 
-    // Show every raw read in the preview box so user can see scanner is working
-    document.getElementById('last-value').textContent = data;
-
-    // Cooldown: skip same value within 3s
-    if (data === lastRecorded.data && now - lastRecorded.time < 1500) return;
-    lastRecorded = { data, time: now };
-
-    // Duplicate check
-    if (scannedSet.has(data)) {
-      document.getElementById('last-value').className = 'last-scan-value dup';
+    if (scannedSet.has(trackingNo)) {
+      el.className = 'last-scan-value dup';
+      inputEl.classList.add('dup');
+      setTimeout(() => inputEl.classList.remove('dup'), 600);
       showToast('⚠︎ 已记录过', 'warn');
       if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
       return;
     }
 
-    // Record
-    scannedSet.add(data);
-    document.getElementById('last-value').className = 'last-scan-value new';
-    setTimeout(() => document.getElementById('last-value').classList.remove('new'), 1500);
+    scannedSet.add(trackingNo);
+    el.className = 'last-scan-value new';
+    setTimeout(() => el.classList.remove('new'), 1500);
+    inputEl.classList.add('flash');
+    setTimeout(() => inputEl.classList.remove('flash'), 500);
+    if (navigator.vibrate) navigator.vibrate(60);
 
-    if (navigator.vibrate) navigator.vibrate(80);
-    const overlay = document.getElementById('flash-overlay');
-    overlay.style.background = 'rgba(255,255,255,0.35)';
-    overlay.style.opacity = '1';
-    setTimeout(() => { overlay.style.opacity = '0'; }, 200);
-
-    records.unshift({
-      id: String(now),
-      trackingNo: data,
+    const rec = {
+      id: String(Date.now()),
+      trackingNo,
       time: new Date().toLocaleString('zh-CN', { hour12: false }),
-    });
+    };
+    records.unshift(rec);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
     updateUI();
-    showToast('✓ ' + data);
+    showToast('✓ ' + trackingNo);
   }
 
-  // ── Records UI ──
+  // ── UI ──
+  function switchTab(tab) {
+    const isScan = tab === 'scan';
+    document.getElementById('tab-scan').style.display = isScan ? 'flex' : 'none';
+    document.getElementById('tab-list').style.display = isScan ? 'none' : 'flex';
+    document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', isScan ? i === 0 : i === 1));
+    if (isScan) setTimeout(() => inputEl.focus(), 100);
+  }
+
   function updateUI() {
     const n = records.length;
     document.getElementById('badge').textContent = n + ' 票';
@@ -579,49 +303,48 @@
     document.getElementById('btn-clear').style.display = n > 0 ? 'block' : 'none';
     document.getElementById('empty-state').style.display = n === 0 ? 'flex' : 'none';
 
-    const list = document.getElementById('records-list');
-    list.innerHTML = records.map((r, i) => `
+    // Recent list (scan tab — latest 20)
+    document.getElementById('recent-list').innerHTML = records.slice(0, 20).map((r, i) => `
+      <div class="recent-item">
+        <div class="recent-num"><span class="recent-num-text">${n - i}</span></div>
+        <span class="recent-tracking">${escHtml(r.trackingNo)}</span>
+        <span class="recent-time">${r.time.split(' ')[1] || r.time}</span>
+      </div>`).join('');
+
+    // Full list (list tab)
+    document.getElementById('records-list').innerHTML =
+      (n === 0 ? '<div class="empty-state"><div class="empty-title">暂无记录</div><div class="empty-hint">扫码后记录显示在这里</div></div>' : '') +
+      records.map((r, i) => `
       <div class="record-item">
         <div class="record-index"><span class="record-index-text">${n - i}</span></div>
         <div class="record-body">
           <div class="record-tracking">${escHtml(r.trackingNo)}</div>
           <div class="record-meta">${r.time}</div>
         </div>
-        <button class="record-copy" onclick="copyRecord('${escHtml(r.trackingNo)}')">复制</button>
-      </div>
-    `).join('');
-  }
-
-  function copyRecord(text) {
-    navigator.clipboard.writeText(text).then(() => showToast('已复制'));
+        <button class="record-copy" onclick="copyText('${escHtml(r.trackingNo)}')">复制</button>
+      </div>`).join('');
   }
 
   // ── Export ──
   function exportCSV() {
-    if (records.length === 0) { showToast('暂无记录'); return; }
-    const bom = '﻿';
-    const header = '运单号,扫描时间\n';
-    const rows = records.map(r => `"${r.trackingNo}","${r.time}"`).join('\n');
-    const blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `GOFO扫码记录_${new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')}.csv`;
+    if (!records.length) { showToast('暂无记录'); return; }
+    const csv = '﻿运单号,扫描时间\n' + records.map(r => `"${r.trackingNo}","${r.time}"`).join('\n');
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })),
+      download: `GOFO扫码记录_${new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')}.csv`
+    });
     a.click();
-    URL.revokeObjectURL(url);
     showToast('CSV 已导出');
   }
 
-  // ── Clear ──
   function clearAll() {
-    if (!confirm(`确认清空全部 ${records.length} 条记录？此操作无法恢复。`)) return;
-    records = [];
-    scannedSet.clear();
-    lastRecorded = { data: null, time: 0 };
+    if (!confirm(`确认清空全部 ${records.length} 条记录？`)) return;
+    records = []; scannedSet.clear();
     localStorage.removeItem(STORAGE_KEY);
-    updateUI();
-    showToast('已清空');
+    updateUI(); showToast('已清空');
   }
+
+  function copyText(t) { navigator.clipboard?.writeText(t).then(() => showToast('已复制')); }
 
   // ── Toast ──
   let toastTimer;
@@ -635,7 +358,7 @@
   }
 
   function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 </script>
 </body>
