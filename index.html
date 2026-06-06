@@ -391,23 +391,7 @@
   let scannedSet = new Set(records.map(r => r.trackingNo));
   let scanner = null;
   let scannerStarted = false;
-
-  // Vote buffer: collect reads over 1.5s, pick most common
-  let voteWindow = []; // [{data, time}]
-  const VOTE_WINDOW_MS = 1500;
-  const VOTE_THRESHOLD = 2; // need 2 reads to confirm
-
-  // Normalise: strip common 1-2 char prefix misreads by keying on the longer suffix
-  function getSuffix(s) { return s.length > 6 ? s.slice(2) : s; }
-
-  function matchesExisting(data) {
-    const sfx = getSuffix(data);
-    for (const existing of scannedSet) {
-      if (existing === data) return true;
-      if (getSuffix(existing) === sfx && existing.length === data.length) return true;
-    }
-    return false;
-  }
+  let lastRecorded = { data: null, time: 0 };
 
   // ── Init ──
   updateUI();
@@ -507,7 +491,7 @@
     try {
       await scanner.start(
         { facingMode: 'environment' },
-        { fps: 20, aspectRatio: 1.333 }, // no qrbox = full frame scan
+        { fps: 10, qrbox: { width: 250, height: 250 } },
         onScanSuccess,
         () => {}
       );
@@ -535,39 +519,25 @@
   function onScanSuccess(data) {
     const now = Date.now();
 
-    // Add to vote window, evict old entries
-    voteWindow.push({ data, time: now });
-    voteWindow = voteWindow.filter(e => now - e.time < VOTE_WINDOW_MS);
+    // Show every raw read in the preview box so user can see scanner is working
+    document.getElementById('last-value').textContent = data;
 
-    // Tally votes by suffix (tolerates 1-2 char prefix misread)
-    const tally = {};
-    for (const e of voteWindow) {
-      const key = getSuffix(e.data) + '_' + e.data.length;
-      if (!tally[key]) tally[key] = { count: 0, latest: e.data };
-      tally[key].count++;
-      tally[key].latest = e.data; // prefer latest read as canonical
-    }
+    // Cooldown: skip same value within 3s
+    if (data === lastRecorded.data && now - lastRecorded.time < 3000) return;
+    lastRecorded = { data, time: now };
 
-    // Find winner: first key that hits threshold
-    const winner = Object.values(tally).find(v => v.count >= VOTE_THRESHOLD);
-    if (!winner) return;
-
-    const canonical = winner.latest;
-    voteWindow = []; // reset after confirmed read
-
-    const el = document.getElementById('last-value');
-    el.textContent = canonical;
-
-    if (matchesExisting(canonical)) {
-      el.className = 'last-scan-value dup';
+    // Duplicate check
+    if (scannedSet.has(data)) {
+      document.getElementById('last-value').className = 'last-scan-value dup';
       showToast('⚠︎ 已记录过', 'warn');
       if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
       return;
     }
 
-    scannedSet.add(canonical);
-    el.className = 'last-scan-value new';
-    setTimeout(() => el.classList.remove('new'), 1500);
+    // Record
+    scannedSet.add(data);
+    document.getElementById('last-value').className = 'last-scan-value new';
+    setTimeout(() => document.getElementById('last-value').classList.remove('new'), 1500);
 
     if (navigator.vibrate) navigator.vibrate(80);
     const overlay = document.getElementById('flash-overlay');
@@ -575,15 +545,14 @@
     overlay.style.opacity = '1';
     setTimeout(() => { overlay.style.opacity = '0'; }, 200);
 
-    const rec = {
+    records.unshift({
       id: String(now),
-      trackingNo: canonical,
+      trackingNo: data,
       time: new Date().toLocaleString('zh-CN', { hour12: false }),
-    };
-    records.unshift(rec);
+    });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
     updateUI();
-    showToast('✓ ' + canonical);
+    showToast('✓ ' + data);
   }
 
   // ── Records UI ──
@@ -632,6 +601,7 @@
     if (!confirm(`确认清空全部 ${records.length} 条记录？此操作无法恢复。`)) return;
     records = [];
     scannedSet.clear();
+    lastRecorded = { data: null, time: 0 };
     localStorage.removeItem(STORAGE_KEY);
     updateUI();
     showToast('已清空');
