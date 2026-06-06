@@ -396,6 +396,18 @@
   // ── Init ──
   updateUI();
 
+  // Auto-record from URL param: ?add=TRACKINGNO (called by iOS Shortcut)
+  (function checkURLParam() {
+    const params = new URLSearchParams(location.search);
+    const val = params.get('add');
+    if (!val) return;
+    // Clean URL without reload
+    history.replaceState(null, '', location.pathname);
+    // Switch to scan tab to show result
+    switchTab('scan');
+    setTimeout(() => onScanSuccess(val), 300);
+  })();
+
   // ── Tab switching ──
   function switchTab(tab) {
     const isScan = tab === 'scan';
