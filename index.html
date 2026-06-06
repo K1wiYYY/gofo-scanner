@@ -439,20 +439,24 @@
   // ── Android Chrome: native BarcodeDetector (fast) ──
   async function startNativeScanner() {
     try {
+      // Only use formats the device actually supports
+      const allFormats = ['code_128','code_39','code_93','codabar','ean_13','ean_8',
+                          'upc_a','upc_e','itf','pdf417','data_matrix','qr_code','aztec'];
+      const supported = await BarcodeDetector.getSupportedFormats().catch(() => allFormats);
+      const formats = allFormats.filter(f => supported.includes(f));
+      nativeDetector = new BarcodeDetector({ formats: formats.length ? formats : allFormats });
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
       });
 
       nativeVideo = document.createElement('video');
       nativeVideo.srcObject = stream;
-      nativeVideo.setAttribute('playsinline', true);
+      nativeVideo.setAttribute('playsinline', '');
+      nativeVideo.setAttribute('muted', '');
       nativeVideo.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
       document.getElementById('reader').appendChild(nativeVideo);
       await nativeVideo.play();
-
-      const formats = ['code_128','code_39','code_93','codabar','ean_13','ean_8',
-                       'upc_a','upc_e','itf','pdf417','data_matrix','qr_code','aztec'];
-      nativeDetector = new BarcodeDetector({ formats });
 
       scannerStarted = true;
       document.getElementById('scan-line').style.display = 'block';
@@ -463,15 +467,18 @@
       async function detectLoop() {
         if (!scannerStarted) return;
         try {
-          const results = await nativeDetector.detect(nativeVideo);
-          if (results.length > 0) onScanSuccess(results[0].rawValue);
+          if (nativeVideo.readyState >= 2) {
+            const results = await nativeDetector.detect(nativeVideo);
+            if (results.length > 0) onScanSuccess(results[0].rawValue);
+          }
         } catch (_) {}
         nativeRafId = requestAnimationFrame(detectLoop);
       }
       detectLoop();
     } catch (err) {
-      document.getElementById('start-wrap').style.display = 'flex';
-      document.querySelector('.start-hint').textContent = '摄像头启动失败，请检查权限';
+      console.warn('Native scanner failed, falling back:', err);
+      // Auto-fallback to JS library
+      await startLibraryScanner();
     }
   }
 
