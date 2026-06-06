@@ -453,20 +453,23 @@
       hint.textContent = '🚀 原生识别 · 对准条形码即可';
       hint.style.display = 'block';
 
+      // Draw to a small canvas before detecting — much faster than full-res video
+      const snapCanvas = document.createElement('canvas');
+      snapCanvas.width = 640; snapCanvas.height = 480;
+      const snapCtx = snapCanvas.getContext('2d');
+
       let detecting = false;
-      function detectLoop() {
-        if (!scannerStarted) return;
-        nativeRafId = requestAnimationFrame(detectLoop);
-        if (detecting || nativeVideo.readyState < 2) return;
+      nativeRafId = setInterval(() => {
+        if (!scannerStarted || detecting || nativeVideo.readyState < 2) return;
+        snapCtx.drawImage(nativeVideo, 0, 0, 640, 480);
         detecting = true;
-        nativeDetector.detect(nativeVideo)
+        nativeDetector.detect(snapCanvas)
           .then(results => {
             detecting = false;
             if (results.length > 0) onScanSuccess(results[0].rawValue);
           })
           .catch(() => { detecting = false; });
-      }
-      detectLoop();
+      }, 80); // ~12fps, fast enough without overwhelming the CPU
     } catch (err) {
       console.warn('Native scanner failed, falling back:', err);
       // Clear any partial native setup before fallback
