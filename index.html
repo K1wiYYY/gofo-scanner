@@ -410,11 +410,8 @@
   let nativeRafId = null;
   let nativeVideo = null;
 
-  // Native BarcodeDetector: Android Chrome only. Force JS library on iOS/Safari.
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-  const useNative = !isIOS && !isSafari && 'BarcodeDetector' in window;
+  // Use native BarcodeDetector on ALL platforms if available (iOS 17+, Android Chrome)
+  const useNative = 'BarcodeDetector' in window;
 
   async function startScanner() {
     if (scannerStarted) return;
@@ -442,11 +439,12 @@
       });
 
       nativeVideo = document.createElement('video');
-      nativeVideo.srcObject = stream;
       nativeVideo.setAttribute('playsinline', '');
       nativeVideo.setAttribute('muted', '');
+      nativeVideo.setAttribute('autoplay', '');
       nativeVideo.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
-      document.getElementById('reader').appendChild(nativeVideo);
+      document.getElementById('reader').appendChild(nativeVideo); // must be in DOM first on iOS
+      nativeVideo.srcObject = stream;
       await nativeVideo.play();
 
       scannerStarted = true;
