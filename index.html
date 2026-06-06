@@ -211,20 +211,35 @@ let camStarted = false;
 updateUI();
 setupPDA();
 
-// URL param from iOS Shortcut — ?add=TRACKINGNO
+// URL param from iOS Shortcut
 (() => {
-  const v = new URLSearchParams(location.search).get('add');
-  if (!v) return;
+  const params = new URLSearchParams(location.search);
   history.replaceState(null, '', location.pathname);
-  // Show shortcut-mode overlay (full screen result)
-  document.getElementById('shortcut-overlay').style.display = 'flex';
-  setTimeout(() => {
-    record(v.trim());
-    // Auto-hide overlay after 1.2s so user sees result before next scan
+
+  // ?add=SINGLE — single scan mode
+  const single = params.get('add');
+  if (single) {
+    document.getElementById('shortcut-overlay').style.display = 'flex';
     setTimeout(() => {
-      document.getElementById('shortcut-overlay').style.display = 'none';
-    }, 1200);
-  }, 100);
+      record(single.trim());
+      setTimeout(() => { document.getElementById('shortcut-overlay').style.display = 'none'; }, 1200);
+    }, 100);
+  }
+
+  // ?bulk=A,B,C — batch mode (loop shortcut)
+  const bulk = params.get('bulk');
+  if (bulk) {
+    const items = bulk.split(',').map(s => s.trim()).filter(Boolean);
+    const overlay = document.getElementById('shortcut-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('s-icon').textContent = '📦';
+    document.getElementById('s-icon').style.color = 'var(--accent)';
+    document.getElementById('s-msg').textContent = `批量导入 ${items.length} 票`;
+    document.getElementById('s-val').textContent = '';
+    items.forEach(v => record(v));
+    document.getElementById('s-val').textContent = `已记录 ${items.length} 票`;
+    setTimeout(() => { overlay.style.display = 'none'; }, 2000);
+  }
 })();
 
 // ── PDA / keyboard wedge ──
