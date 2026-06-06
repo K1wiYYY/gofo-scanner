@@ -503,8 +503,8 @@
     scanner = new Html5Qrcode('reader', { formatsToSupport: formats, verbose: false });
     try {
       await scanner.start(
-        { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
-        { fps: 25, aspectRatio: 1.333 },
+        { facingMode: 'environment' },
+        { fps: 15, qrbox: { width: 260, height: 140 }, aspectRatio: 1.333 },
         onScanSuccess,
         () => {}
       );
