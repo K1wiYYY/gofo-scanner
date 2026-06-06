@@ -477,7 +477,10 @@
       detectLoop();
     } catch (err) {
       console.warn('Native scanner failed, falling back:', err);
-      // Auto-fallback to JS library
+      // Clear any partial native setup before fallback
+      const readerEl = document.getElementById('reader');
+      if (nativeVideo) { try { nativeVideo.srcObject?.getTracks().forEach(t => t.stop()); } catch(_){} }
+      readerEl.innerHTML = '';
       await startLibraryScanner();
     }
   }
@@ -508,7 +511,12 @@
       hint2.style.display = 'block';
     } catch (err) {
       document.getElementById('start-wrap').style.display = 'flex';
-      document.querySelector('.start-hint').textContent = '摄像头启动失败，请检查权限';
+      const msg = err.name === 'NotAllowedError' ? '请在浏览器设置中允许摄像头权限，然后刷新页面'
+                : err.name === 'NotFoundError'   ? '未找到摄像头，请检查设备'
+                : err.name === 'NotReadableError' ? '摄像头被其他应用占用，请关闭后重试'
+                : '启动失败：' + err.message;
+      document.querySelector('.start-hint').textContent = msg;
+      console.error(err.name, err.message);
     }
   }
 
