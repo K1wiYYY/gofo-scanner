@@ -515,12 +515,17 @@
       hint2.style.display = 'block';
     } catch (err) {
       document.getElementById('start-wrap').style.display = 'flex';
-      const msg = err.name === 'NotAllowedError' ? '请在浏览器设置中允许摄像头权限，然后刷新页面'
-                : err.name === 'NotFoundError'   ? '未找到摄像头，请检查设备'
-                : err.name === 'NotReadableError' ? '摄像头被其他应用占用，请关闭后重试'
-                : '启动失败：' + err.message;
+      // err may be a string (html5-qrcode) or an Error object
+      const errStr = typeof err === 'string' ? err : (err?.message || err?.name || JSON.stringify(err));
+      const msg = (errStr.includes('NotAllowed') || errStr.includes('Permission'))
+                    ? '请允许摄像头权限：浏览器地址栏 → 点锁头图标 → 摄像头 → 允许，然后刷新'
+                : errStr.includes('NotFound')
+                    ? '未检测到摄像头，请检查设备'
+                : errStr.includes('NotReadable') || errStr.includes('busy')
+                    ? '摄像头被其他应用占用，请关闭后刷新重试'
+                : '启动失败：' + errStr;
       document.querySelector('.start-hint').textContent = msg;
-      console.error(err.name, err.message);
+      console.error('Scanner error:', err);
     }
   }
 
