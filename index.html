@@ -390,20 +390,23 @@
   let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
   let scannedSet = new Set(records.map(r => r.trackingNo));
   let scanner = null;
-  let lastRaw = { data: null, time: 0 };
-  let confirmBuf = [];
   let scannerStarted = false;
 
-  // Smart match: GFUS01234 vs AFUS01234 → same (first 2 chars may be misread)
-  // Returns the canonical (later) value if matched, null if no match
+  // Vote buffer: collect reads over 1.5s, pick most common
+  let voteWindow = []; // [{data, time}]
+  const VOTE_WINDOW_MS = 1500;
+  const VOTE_THRESHOLD = 2; // need 2 reads to confirm
+
+  // Normalise: strip common 1-2 char prefix misreads by keying on the longer suffix
+  function getSuffix(s) { return s.length > 6 ? s.slice(2) : s; }
+
   function matchesExisting(data) {
-    const suffix = data.slice(2);
-    if (suffix.length < 8) return null;
+    const sfx = getSuffix(data);
     for (const existing of scannedSet) {
-      if (existing === data) return existing;
-      if (existing.slice(2) === suffix && existing.length === data.length) return existing;
+      if (existing === data) return true;
+      if (getSuffix(existing) === sfx && existing.length === data.length) return true;
     }
-    return null;
+    return false;
   }
 
   // ── Init ──
@@ -504,7 +507,7 @@
     try {
       await scanner.start(
         { facingMode: 'environment' },
-        { fps: 15, qrbox: { width: 260, height: 140 }, aspectRatio: 1.333 },
+        { fps: 20, aspectRatio: 1.333 }, // no qrbox = full frame scan
         onScanSuccess,
         () => {}
       );
@@ -531,38 +534,37 @@
 
   function onScanSuccess(data) {
     const now = Date.now();
-    // Debounce: skip same raw value within 300ms
-    if (data === lastRaw.data && now - lastRaw.time < 300) return;
-    lastRaw = { data, time: now };
 
-    // Consensus: need 2 consecutive reads with same suffix (tolerates 2-char prefix misread)
-    confirmBuf.push(data);
-    if (confirmBuf.length > 2) confirmBuf.shift();
+    // Add to vote window, evict old entries
+    voteWindow.push({ data, time: now });
+    voteWindow = voteWindow.filter(e => now - e.time < VOTE_WINDOW_MS);
 
-    const prev = confirmBuf[0], curr = confirmBuf[1];
-    if (confirmBuf.length < 2) return;
-    // Accept if exact match OR suffix matches (same number, different prefix misread)
-    const sameRead = prev === curr ||
-      (prev.length === curr.length && prev.length > 8 && prev.slice(2) === curr.slice(2));
-    if (!sameRead) return;
+    // Tally votes by suffix (tolerates 1-2 char prefix misread)
+    const tally = {};
+    for (const e of voteWindow) {
+      const key = getSuffix(e.data) + '_' + e.data.length;
+      if (!tally[key]) tally[key] = { count: 0, latest: e.data };
+      tally[key].count++;
+      tally[key].latest = e.data; // prefer latest read as canonical
+    }
 
-    // Use the later (curr) read as canonical value
-    const canonical = curr;
-    confirmBuf = [];
+    // Find winner: first key that hits threshold
+    const winner = Object.values(tally).find(v => v.count >= VOTE_THRESHOLD);
+    if (!winner) return;
+
+    const canonical = winner.latest;
+    voteWindow = []; // reset after confirmed read
 
     const el = document.getElementById('last-value');
     el.textContent = canonical;
 
-    // Check duplicate (exact or smart suffix match)
-    const existingMatch = matchesExisting(canonical);
-    if (existingMatch) {
+    if (matchesExisting(canonical)) {
       el.className = 'last-scan-value dup';
       showToast('⚠︎ 已记录过', 'warn');
       if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
       return;
     }
 
-    // Record new entry
     scannedSet.add(canonical);
     el.className = 'last-scan-value new';
     setTimeout(() => el.classList.remove('new'), 1500);
