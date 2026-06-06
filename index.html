@@ -423,7 +423,11 @@
   let nativeRafId = null;
   let nativeVideo = null;
 
-  const useNative = 'BarcodeDetector' in window; // Android Chrome: native API
+  // Native BarcodeDetector: Android Chrome only. Force JS library on iOS/Safari.
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  const useNative = !isIOS && !isSafari && 'BarcodeDetector' in window;
 
   async function startScanner() {
     if (scannerStarted) return;
