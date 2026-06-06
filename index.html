@@ -357,7 +357,7 @@
         <span class="start-hint">点击后请允许摄像头权限</span>
       </div>
 
-      <span class="scan-hint" id="scan-hint-text" style="display:none">对准条形码，无需精确对齐</span>
+      <span class="scan-hint" id="scan-hint-text" style="display:none"></span>
     </div>
 
     <div class="last-scan">
@@ -419,47 +419,89 @@
   }
 
   // ── Scanner ──
+  let nativeDetector = null;
+  let nativeRafId = null;
+  let nativeVideo = null;
+
+  const useNative = 'BarcodeDetector' in window; // Android Chrome: native API
+
   async function startScanner() {
     if (scannerStarted) return;
     document.getElementById('start-wrap').style.display = 'none';
 
+    if (useNative) {
+      await startNativeScanner();
+    } else {
+      await startLibraryScanner();
+    }
+  }
+
+  // ── Android Chrome: native BarcodeDetector (fast) ──
+  async function startNativeScanner() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+      });
+
+      nativeVideo = document.createElement('video');
+      nativeVideo.srcObject = stream;
+      nativeVideo.setAttribute('playsinline', true);
+      nativeVideo.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
+      document.getElementById('reader').appendChild(nativeVideo);
+      await nativeVideo.play();
+
+      const formats = ['code_128','code_39','code_93','codabar','ean_13','ean_8',
+                       'upc_a','upc_e','itf','pdf417','data_matrix','qr_code','aztec'];
+      nativeDetector = new BarcodeDetector({ formats });
+
+      scannerStarted = true;
+      document.getElementById('scan-line').style.display = 'block';
+      const hint = document.getElementById('scan-hint-text');
+      hint.textContent = '🚀 原生识别 · 对准条形码即可';
+      hint.style.display = 'block';
+
+      async function detectLoop() {
+        if (!scannerStarted) return;
+        try {
+          const results = await nativeDetector.detect(nativeVideo);
+          if (results.length > 0) onScanSuccess(results[0].rawValue);
+        } catch (_) {}
+        nativeRafId = requestAnimationFrame(detectLoop);
+      }
+      detectLoop();
+    } catch (err) {
+      document.getElementById('start-wrap').style.display = 'flex';
+      document.querySelector('.start-hint').textContent = '摄像头启动失败，请检查权限';
+    }
+  }
+
+  // ── iOS Safari: html5-qrcode JS library (fallback) ──
+  async function startLibraryScanner() {
     const formats = [
-      Html5QrcodeSupportedFormats.CODE_128,
-      Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.CODE_93,
-      Html5QrcodeSupportedFormats.CODABAR,
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.ITF,
-      Html5QrcodeSupportedFormats.PDF_417,
-      Html5QrcodeSupportedFormats.DATA_MATRIX,
-      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.CODE_93,  Html5QrcodeSupportedFormats.CODABAR,
+      Html5QrcodeSupportedFormats.EAN_13,   Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,    Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.ITF,      Html5QrcodeSupportedFormats.PDF_417,
+      Html5QrcodeSupportedFormats.DATA_MATRIX, Html5QrcodeSupportedFormats.QR_CODE,
       Html5QrcodeSupportedFormats.AZTEC,
     ];
-
     scanner = new Html5Qrcode('reader', { formatsToSupport: formats, verbose: false });
-
     try {
-      const constraints = {
-        facingMode: 'environment',
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-      };
       await scanner.start(
-        constraints,
-        { fps: 25, aspectRatio: 1.333 }, // no qrbox — full frame scan
+        { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+        { fps: 25, aspectRatio: 1.333 },
         onScanSuccess,
         () => {}
       );
       scannerStarted = true;
       document.getElementById('scan-line').style.display = 'block';
-      document.getElementById('scan-hint-text').style.display = 'block';
+      const hint2 = document.getElementById('scan-hint-text');
+      hint2.textContent = '对准条形码，无需精确对齐';
+      hint2.style.display = 'block';
     } catch (err) {
       document.getElementById('start-wrap').style.display = 'flex';
       document.querySelector('.start-hint').textContent = '摄像头启动失败，请检查权限';
-      console.error(err);
     }
   }
 
